@@ -1,0 +1,7 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {Simulation} from '../.test-build/sim.js';
+test('starter car can be entered, accelerated, steered, stopped and exited',()=>{const s=new Simulation();s.zombies=[];s.toggleVehicle();assert.equal(s.driving,true);const start=s.vehicle.x;for(let i=0;i<20;i++)s.update(.05,{x:-1,y:-1,run:false,sneak:false});assert.ok(s.vehicle.x>start);assert.ok(s.vehicle.speed>0);s.toggleVehicle();assert.equal(s.driving,true);s.vehicle.speed=0;s.toggleVehicle();assert.equal(s.driving,false);assert.ok(Math.hypot(s.player.x-s.vehicle.x,s.player.y-s.vehicle.y)>1);});
+test('cars cannot pass through house interiors even through an open doorway',()=>{const s=new Simulation(),h=s.houses.find(h=>h.x===21&&h.y===13);h.door=true;assert.equal(s.vehicleBlocked(h.x+2,h.y+2),true);s.vehicle.x=h.x+2.5;s.vehicle.y=h.y+h.d+2;s.vehicle.angle=-Math.PI/2;s.driving=true;s.vehicle.speed=10;s.drive(.05,0,1);assert.ok(s.vehicle.y>h.y+h.d);h.door=false;});
+test('gunfire is disabled in the car and steering changes heading',()=>{const s=new Simulation();s.toggleVehicle();s.weapon='rifle';s.attack();assert.equal(s.ammo,6);s.vehicle.speed=5;s.drive(.05,1,1);assert.ok(s.vehicle.angle>0);});
+test('nearby procedural regions contain distinct scenery and terrain',()=>{const s=new Simulation();const districts=new Set(s.world.active.map(r=>r.district));assert.ok(districts.size>=4);assert.ok(s.world.active.some(r=>r.patches.some(p=>p.kind==='water'||p.kind==='field')));assert.ok(s.world.active.some(r=>r.props.length>5));});
