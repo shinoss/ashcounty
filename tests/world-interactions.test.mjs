@@ -1,0 +1,9 @@
+import {test} from 'node:test';
+import assert from 'node:assert/strict';
+import {Simulation} from '../.test-build/sim.js';
+import {carContains,carOverlap} from '../.test-build/collision.js';
+test('trees and interior furniture block people and vehicle footprints',()=>{const s=new Simulation(),tree=s.world.active.flatMap(r=>r.trees)[0],h=s.houses[0];assert.ok(s.blocked(tree.x,tree.y));assert.ok(s.blocked(h.x+h.w/2,h.y+h.d/2));assert.ok(carOverlap({...s.vehicle,x:tree.x,y:tree.y},s.solids.all.find(b=>b.kind==='tree'&&Math.abs(b.x+.22-tree.x)<.001)));});
+test('zombies remain outside the car and can damage its occupant',()=>{const s=new Simulation();s.toggleVehicle();const v=s.vehicle,z={x:v.x,y:v.y+.9,hp:100,phase:0,alert:true,cooldown:0,hit:0};s.zombies=[z];s.update(.05,{x:0,y:0,run:false,sneak:false});assert.ok(!carContains(v,z.x,z.y));assert.ok(s.player.hp<100);});
+test('running over a zombie records a fall and blood event once',()=>{const s=new Simulation();s.toggleVehicle();const v=s.vehicle,z={x:v.x+1.7,y:v.y,hp:100,phase:0,alert:true,cooldown:0,hit:0};s.zombies=[z];v.speed=8;s.drive(.05,0,1);assert.equal(z.hp,0);assert.equal(z.deathCause,'vehicle');assert.equal(s.kills,1);s.drive(.05,0,1);assert.equal(s.kills,1);});
+test('rifle can hit beyond the old 14-tile limit',()=>{const s=new Simulation();for(const r of s.world.cache.values()){r.vehicles=[];r.zombies=[];}s.vehicles=[];s.player.x=3;s.player.y=23;s.player.angle=0;const z={x:40,y:23,hp:100,phase:0,alert:false,cooldown:0,hit:0};s.zombies=[z];s.equip('rifle');s.fire();assert.equal(z.hp,0);assert.equal(z.deathCause,'shot');assert.ok(s.shotEnd.x>39);});
+test('woodlands and generated regions have no water patches',()=>{const s=new Simulation();for(let i=-2;i<=2;i++)for(let j=-2;j<=2;j++)assert.ok(s.world.region(i,j).patches.every(p=>p.kind!=='water'));});

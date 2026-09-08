@@ -1,0 +1,1 @@
+export const FOODS={Apple:{name:'Apple',hunger:12,water:4,weight:.15},Cheese:{name:'Cheese',hunger:24,water:0,weight:.2},Sandwich:{name:'Sandwich',hunger:35,water:0,weight:.3},Yogurt:{name:'Yogurt',hunger:18,water:5,weight:.2},Carrots:{name:'Carrots',hunger:16,water:3,weight:.2},Milk:{name:'Milk',hunger:12,water:22,weight:.5}};

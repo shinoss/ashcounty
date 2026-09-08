@@ -1,49 +1,73 @@
-import {CHUNK_SIZE,type Region} from './world';
-import type {LootCrate} from './loot';
+import {loadVarietyArt} from './variety-art';
+import {GameAudio} from './game-audio';
 import {LootPanel} from './loot-panel';
-import Phaser from 'phaser';
+import {World3D} from './render3d';
+import {SIGHT_RADIUS} from './visibility';
+import {loadModels} from './models3d';
 import './style.css';
-import {Simulation,ATTACK_DURATION,type House,type Zombie} from './sim';
+import {Simulation} from './sim';
 import * as Art from './art';
 import {UI} from './ui';
+async function boot(){
+const loading=document.createElement('div');loading.className='asset-loading';loading.textContent='ASH COUNTY · Loading world artwork…';document.body.append(loading);
+await Promise.all([Art.loadSprites(),loadModels(),loadVarietyArt()]);loading.remove();
 const simulation=new Simulation();
-let audioContext:AudioContext|undefined,gain:GainNode|undefined;
-function sound(){if(!audioContext){audioContext=new AudioContext();gain=audioContext.createGain();gain.gain.value=.04;gain.connect(audioContext.destination);const buffer=audioContext.createBuffer(1,audioContext.sampleRate*4,audioContext.sampleRate);const channel=buffer.getChannelData(0);let last=0;for(let i=0;i<channel.length;i++){last=(last+Math.random()*.04-.02)/1.02;channel[i]=last*4;}const source=audioContext.createBufferSource();source.buffer=buffer;source.loop=true;const filter=audioContext.createBiquadFilter();filter.type='lowpass';filter.frequency.value=500;source.connect(filter);filter.connect(gain);source.start();}gain!.gain.setTargetAtTime(ui.muted?0:.15,audioContext.currentTime,.3);void audioContext.resume();}
-const ui=new UI(simulation,()=>location.reload(),sound);
+const audio=new GameAudio();
+const ui=new UI(simulation,()=>location.reload(),()=>audio.setMuted(ui.muted));
+const unlockAudio=()=>audio.setMuted(ui.muted);window.addEventListener('pointerdown',unlockAudio,{once:true});window.addEventListener('keydown',unlockAudio,{once:true});
 const lootPanel=new LootPanel(simulation,name=>ui.inventory.art(name));
 const mobile={x:0,y:0};
 document.querySelectorAll<HTMLButtonElement>('[data-move]').forEach(b=>{b.onpointerdown=e=>{e.preventDefault();b.setPointerCapture(e.pointerId);const d=b.dataset.move;mobile.x=d==='left'?-1:d==='right'?1:0;mobile.y=d==='up'?-1:d==='down'?1:0;};b.onpointerup=b.onpointercancel=()=>{mobile.x=mobile.y=0;};});
-class World extends Phaser.Scene {
- vehicleSprite!:Phaser.GameObjects.Image;playerSprite!:Phaser.GameObjects.Image; zombieSprites=new Map<Zombie,Phaser.GameObjects.Image>();crateSprites=new Map<LootCrate,Phaser.GameObjects.Image>();buildingSprites=new Map<House,{sprite:Phaser.GameObjects.Image;key:string}>();regions=new Map<string,{objects:Phaser.GameObjects.GameObject[];textures:string[];region:Region}>();firing=false; trees:Phaser.GameObjects.Image[]=[];keys!:Record<string,Phaser.Input.Keyboard.Key>;ring!:Phaser.GameObjects.Graphics; fx!:Phaser.GameObjects.Graphics; camReady=false;hudTick=0;survivorCanvas=Art.canvas(96,112);
- constructor(){super('neighborhood');}
- create(){const register=(key:string,c:HTMLCanvasElement)=>this.textures.addCanvas(key,c);for(let i=0;i<32;i++)register('drivable-'+i,Art.driveCar(i/32*Math.PI*2));for(const kind of ['bench','grave','hay','pump','sign','barrel'])register('prop-'+kind,Art.scenery(kind));register('crate',Art.storageCrate());register('crate-empty',Art.storageCrate(true));for(let i=0;i<3;i++)register('tree-'+i,Art.tree(i));for(const action of ['idle','walk','attack','hurt'] as const)for(let i=0;i<16;i++)register(`zombie-${action}-${i}`,Art.undead(action,i));register('survivor',Art.survivor('idle',0,false,'bat',false,0,this.survivorCanvas));register('car-green',Art.car('#7c8978'));register('car-red',Art.car('#977766'));register('car-blue',Art.car('#748985'));register('fence',Art.fence());register('lamp',Art.lamp());register('mailbox',Art.mailbox());
- this.syncRegions();this.vehicleSprite=this.add.image(0,0,'drivable-0').setOrigin(.5,96/160);
- this.ring=this.add.graphics();this.fx=this.add.graphics().setDepth(1e12);this.playerSprite=this.add.image(0,0,'survivor').setOrigin(.5,100/112);
- this.keys=this.input.keyboard!.addKeys('W,A,S,D,UP,LEFT,DOWN,RIGHT,SHIFT,C,SPACE,E,I,M,J,ESC,TWO,THREE,FOUR,FIVE,ONE') as Record<string,Phaser.Input.Keyboard.Key>;
- this.input.keyboard!.on('keydown',(event:KeyboardEvent)=>{if(event.repeat)return;const k=event.key.toLowerCase();if(k==='escape'){this.firing=false;if(lootPanel.crate){lootPanel.close();return;}ui.toggle(ui.panel||'pause');return;}if(['i','m','j'].includes(k)){this.firing=false;ui.toggle({i:'inventory',m:'map',j:'journal'}[k]!);return;}if(ui.panel)return;if(k==='f'){this.firing=false;simulation.toggleVehicle();}if(k==='e')simulation.interact();if(k===' '){if(simulation.driving)simulation.vehicle.speed=0;else simulation.attack();}if(k==='1')simulation.equip('bat');if(k==='6')simulation.equip('rifle');if(k==='q')simulation.equip(simulation.weapon==='bat'?'rifle':'bat');if(k==='r')simulation.reload();if(k==='2')simulation.use('Bandage');if(k==='3')simulation.use('Water');if(k==='4')simulation.use('Beans');if(k==='5')simulation.use('Plank');});
- this.input.mouse!.disableContextMenu();this.input.on('pointerdown',(pointer:Phaser.Input.Pointer,over:Phaser.GameObjects.GameObject[])=>{if(!ui.panel&&pointer.leftButtonDown()){const target=over.find(o=>o.getData('crateId'));if(target){this.firing=false;const crate=simulation.crates.find(c=>c.id===target.getData('crateId'));if(crate)lootPanel.open(crate);return;}this.firing=simulation.weapon==='rifle';if(this.firing)this.facePointer(pointer);simulation.attack();}});this.input.on('pointerup',(p:Phaser.Input.Pointer)=>{if(!p.leftButtonDown())this.firing=false;});window.addEventListener('pointerup',(e:PointerEvent)=>{if(e.button===0)this.firing=false;});document.querySelector('#ui')!.addEventListener('pointerdown',()=>{this.firing=false;},true);this.input.on('wheel',(_p:unknown,_o:unknown,_x:number,dy:number)=>{this.cameras.main.setZoom(Phaser.Math.Clamp(this.cameras.main.zoom-dy*.001,.45,1.65));});
- this.cameras.main.setZoom(window.innerWidth<760?1:1.1);this.cameras.main.setBackgroundColor('#4e5b40');window.addEventListener('blur',()=>{this.firing=false;if(!ui.panel&&!simulation.dead&&!simulation.won)ui.toggle('pause');});this.game.events.on(Phaser.Core.Events.HIDDEN,()=>{if(!ui.panel&&!simulation.dead&&!simulation.won)ui.toggle('pause');});
- }
- syncRegions(){const keys=new Set(simulation.world.active.map(r=>r.key));for(const [key,view]of this.regions){if(keys.has(key))continue;for(const object of view.objects)object.destroy();for(const texture of view.textures)this.textures.remove(texture);for(const h of view.region.houses)this.buildingSprites.delete(h);for(const c of view.region.crates)this.crateSprites.delete(c);this.regions.delete(key);}this.trees=this.trees.filter(t=>t.active);
- for(const region of simulation.world.active){if(this.regions.has(region.key))continue;const objects:Phaser.GameObjects.GameObject[]=[],textures:string[]=[];const ox=region.cx*CHUNK_SIZE,oy=region.cy*CHUNK_SIZE,offset=Art.iso(ox,oy),zero=Art.iso(0,0);const register=(key:string,c:HTMLCanvasElement)=>{this.textures.addCanvas(key,c);textures.push(key);};const groundKey='ground:'+region.key;register(groundKey,Art.ground(region.houses.map(h=>({...h,x:h.x-ox,y:h.y-oy})),region.seed,region.patches.map(p=>({...p,x:p.x-ox,y:p.y-oy}))));objects.push(this.add.image(offset.x-zero.x,offset.y-zero.y,groundKey).setOrigin(0).setScale(2).setDepth(-1e9));
- region.houses.forEach((h,i)=>{const key=`house:${region.key}:${i}`;register(key,Art.house(h));register(key+'-open',Art.house({...h,door:true}));register(key+'-inside',Art.house(h,true));const p=Art.iso(h.x,h.y);const sprite=this.add.image(p.x-218,p.y-93,key).setOrigin(0).setDepth(p.y+(h.w+h.d)*16-2);objects.push(sprite);this.buildingSprites.set(h,{sprite,key});const q=Art.iso(h.x+.1,h.y+h.d+.7);objects.push(this.add.image(q.x,q.y,'mailbox').setOrigin(.52,.9).setDepth(q.y));});
- region.trees.forEach((tree,i)=>{const p=Art.iso(tree.x,tree.y);const t=this.add.image(p.x,p.y,'tree-'+tree.variant).setOrigin(.5,.9).setDepth(p.y).setScale(.75+(i%5)*.09);objects.push(t);this.trees.push(t);});
- region.props.forEach(prop=>{const p=Art.iso(prop.x,prop.y);objects.push(this.add.image(p.x,p.y,'prop-'+prop.kind).setOrigin(.5,.88).setDepth(p.y));});
- const parked=region.district==='Market district'?5:region.district==='Industrial yard'?2:region.district==='Wren residential'?2:0;for(let i=0;i<parked;i++){const p=Art.iso(ox+16+i*5,oy+(region.district==='Wren residential'?22:8));objects.push(this.add.image(p.x,p.y,['car-green','car-red','car-blue'][i%3]).setOrigin(.5,.78).setDepth(p.y));}
- region.crates.forEach(crate=>{const p=Art.iso(crate.x,crate.y);const sprite=this.add.image(p.x,p.y,'crate').setOrigin(.5,70/78).setDepth(p.y).setData('crateId',crate.id).setInteractive({useHandCursor:true});sprite.on('pointerover',()=>sprite.setTint(0xe5d6a3));sprite.on('pointerout',()=>sprite.clearTint());objects.push(sprite);this.crateSprites.set(crate,sprite);});this.regions.set(region.key,{objects,textures,region});}}
- facePointer(pointer:Phaser.Input.Pointer){const world=this.cameras.main.getWorldPoint(pointer.x,pointer.y);const p=simulation.player,q=Art.iso(p.x,p.y);const dx=world.x-q.x,dy=world.y-(q.y-48);if(Math.hypot(dx,dy)>8)p.angle=Math.atan2(dy/32-dx/64,dy/32+dx/64);}
- update(_time:number,delta:number){if(!this.keys)return;const k=this.keys;simulation.player.aiming=!simulation.driving&&simulation.weapon==='rifle'&&!ui.panel&&!simulation.dead&&!simulation.won&&this.input.activePointer.rightButtonDown();if(simulation.player.aiming)this.facePointer(this.input.activePointer);const sx=Number(k.D.isDown||k.RIGHT.isDown)-Number(k.A.isDown||k.LEFT.isDown)+mobile.x,sy=Number(k.S.isDown||k.DOWN.isDown)-Number(k.W.isDown||k.UP.isDown)+mobile.y;simulation.update(delta/1000,{x:sx+sy,y:sy-sx,run:k.SHIFT.isDown,sneak:k.C.isDown});if(this.firing&&this.input.activePointer.leftButtonDown()&&!ui.panel&&!simulation.paused){const hit=document.elementFromPoint(this.input.activePointer.x,this.input.activePointer.y);if(hit===this.game.canvas&&simulation.weapon==='rifle'){this.facePointer(this.input.activePointer);simulation.attack();}else this.firing=false;}const p=simulation.player,q=Art.iso(p.x,p.y);const action:Art.SurvivorAction=simulation.attackTime>0?'attack':simulation.damageTime>0?'hurt':p.moving?(p.sneaking?'sneak':p.running?'run':'walk'):'idle';const frame=action==='attack'?Math.min(7,Math.floor((1-simulation.attackTime/ATTACK_DURATION)*8)):p.moving?(p.gait*8)%8:(simulation.elapsed*3)%8;const back=Math.cos(p.angle)+Math.sin(p.angle)<0;const flip=Math.cos(p.angle)-Math.sin(p.angle)<0;const screenAngle=Math.atan2((Math.cos(p.angle)+Math.sin(p.angle))*16,Math.abs((Math.cos(p.angle)-Math.sin(p.angle))*32));Art.survivor(action,frame,back,simulation.weapon,p.aiming,screenAngle,this.survivorCanvas);(this.textures.get('survivor') as Phaser.Textures.CanvasTexture).refresh();
- const car=simulation.vehicle,carPoint=Art.iso(car.x,car.y);this.vehicleSprite.setPosition(carPoint.x,carPoint.y).setDepth(carPoint.y).setTexture('drivable-'+((Math.round(car.angle/(Math.PI*2)*32)%32+32)%32));this.playerSprite.setVisible(!simulation.driving);this.ring.setVisible(!simulation.driving);this.playerSprite.setPosition(q.x,q.y).setDepth(q.y+.2).setFlipX(flip).setAlpha(p.hp<=0?.4:1);this.playerSprite.setTint(simulation.damageTime>0?0xff9977:0xffffff);
- this.ring.clear().setDepth(q.y-.2);this.ring.lineStyle(1,0xd9d5a0,.55);this.ring.strokeEllipse(q.x,q.y+1,28,13);this.ring.fillStyle(0xc1c397,.7);this.ring.fillCircle(q.x,q.y+1,2);
- this.fx.clear();if(simulation.shotTime>0&&simulation.shotEnd){const end=Art.iso(simulation.shotEnd.x,simulation.shotEnd.y);this.fx.lineStyle(2,0xf4d68d,simulation.shotTime/.12);this.fx.lineBetween(q.x,q.y-48,end.x,end.y-48);this.fx.fillStyle(0xffdf8a,1);this.fx.fillCircle(q.x+(flip?-23:23),q.y-48,4);}if(p.aiming){const pointer=this.input.activePointer,at=this.cameras.main.getWorldPoint(pointer.x,pointer.y);this.fx.lineStyle(1,0xe1d7a5,.8);this.fx.strokeCircle(at.x,at.y,7);this.fx.lineBetween(at.x-12,at.y,at.x-4,at.y);this.fx.lineBetween(at.x+4,at.y,at.x+12,at.y);}if(simulation.attackTime>0){const a=1-simulation.attackTime/ATTACK_DURATION;this.fx.lineStyle(3,0xe3d7a9,(1-a)*.8);this.fx.beginPath();this.fx.arc(q.x,q.y-24,35,-1+a*2,1.3+a*2);this.fx.strokePath();}
- const alive=new Set(simulation.zombies.filter(z=>z.hp>0&&Math.hypot(z.x-p.x,z.y-p.y)<38));for(const [z,sprite]of this.zombieSprites)if(!alive.has(z)){sprite.destroy();this.zombieSprites.delete(z);}for(const z of alive){let sprite=this.zombieSprites.get(z);if(!sprite){sprite=this.add.image(0,0,'zombie-idle-0').setOrigin(.5,100/112);this.zombieSprites.set(z,sprite);}const at=Art.iso(z.x,z.y);const state=z.hit>0?'hurt':z.cooldown>1?'attack':z.moving?'walk':'idle';const phase=state==='hurt'?Math.floor((1-z.hit/.25)*15):state==='attack'?Math.floor((1.4-z.cooldown)*35):Math.floor((z.moving?(z.gait||0):simulation.elapsed*.25)*16);sprite.setPosition(at.x,at.y).setDepth(at.y).setTexture(`zombie-${state}-${Math.max(0,phase)%16}`).setFlipX(Math.cos(z.angle||0)-Math.sin(z.angle||0)<0);sprite.setTint(z.hit>0?0xd59776:0xffffff);}
- for(const [h,view]of this.buildingSprites){const inside=simulation.inside(p)===h;view.sprite.setTexture(view.key+(inside?'-inside':h.door?'-open':'')).setDepth(inside?Art.iso(h.x,h.y).y-5:Art.iso(h.x,h.y).y+(h.w+h.d)*16-2);}
- for(const [crate,sprite]of this.crateSprites){const inside=simulation.inside(crate);sprite.setVisible(!inside||simulation.inside(p)===inside).setTexture(crate.items.some(item=>item.quantity>0)?'crate':'crate-empty');}
- this.trees.forEach(t=>t.setAlpha(Math.abs(t.x-q.x)<75&&t.y>q.y&&t.y-q.y<180?.35:1));
- const camera=this.cameras.main;if(!this.camReady){camera.centerOn(q.x,q.y-35);this.camReady=true;}else{const mid=camera.midPoint;camera.centerOn(Phaser.Math.Linear(mid.x,q.x,1-Math.exp(-delta/85)),Phaser.Math.Linear(mid.y,q.y-35,1-Math.exp(-delta/85)));}
- this.hudTick+=delta;if(this.hudTick>100){this.syncRegions();ui.update();lootPanel.update();this.hudTick=0;}
- }
+const view=new World3D(simulation);
+const keys=new Set<string>();let firing=false,aiming=false,pointer={x:innerWidth/2,y:innerHeight/2};
+const canvas=view.renderer.domElement;
+const crosshair=document.createElement('div');crosshair.className='aim-crosshair';crosshair.hidden=true;document.body.append(crosshair);
+function clearInput(){keys.clear();firing=false;aiming=false;mobile.x=mobile.y=0;}
+window.addEventListener('keydown',event=>{
+ if(event.target instanceof HTMLElement&&event.target.closest('input,select,textarea')&&event.key!=='Escape')return;
+ const k=event.key.toLowerCase();if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))event.preventDefault();keys.add(k);if(event.repeat)return;
+ if(k==='escape'){clearInput();if(lootPanel.crate){lootPanel.close();return;}if(simulation.paused&&!ui.panel)simulation.paused=false;else ui.toggle(ui.panel||'pause');return;}
+ if(['i','m','b'].includes(k)){clearInput();ui.toggle(({i:'inventory',m:'map',b:'workshop'} as Record<string,string>)[k]);return;}
+ if(ui.panel)return;
+ if(k==='f'){firing=false;simulation.toggleVehicle();}if(k==='e')simulation.interact();if(k==='g')simulation.toggleDoor();
+ if(k===' '){if(simulation.driving)simulation.vehicle.speed=0;else simulation.attack();}
+ if(k==='1')simulation.equip('bat');if(k==='6')simulation.equip('rifle');if(k==='q')simulation.equip(simulation.weapon==='bat'?'rifle':'bat');if(k==='r')simulation.reload();
+ const consumable=({'2':'Bandage','3':'Water','4':'Beans','5':'Plank'} as Record<string,string>)[k];if(consumable)simulation.use(consumable);
+});
+window.addEventListener('keyup',event=>keys.delete(event.key.toLowerCase()));
+canvas.addEventListener('contextmenu',event=>event.preventDefault());
+canvas.addEventListener('pointermove',event=>{pointer={x:event.clientX,y:event.clientY};});
+canvas.addEventListener('mousedown',event=>{
+ if(ui.panel||simulation.paused)return;pointer={x:event.clientX,y:event.clientY};
+ if(event.button===2){aiming=true;return;}if(event.button!==0)return;
+
+ const door=view.pickDoor(event.clientX,event.clientY);if(door){simulation.toggleDoor(door);return;}
+ const crate=view.pick(event.clientX,event.clientY);if(crate){lootPanel.open(crate);return;}
+ firing=simulation.weapon==='rifle';view.aim(pointer.x,pointer.y);simulation.attack();
+});
+window.addEventListener('mouseup',event=>{if(event.button===0)firing=false;if(event.button===2)aiming=false;});
+canvas.addEventListener('pointercancel',clearInput);
+document.querySelector('#ui')!.addEventListener('pointerdown',()=>{firing=false;aiming=false;},true);
+canvas.addEventListener('wheel',event=>{event.preventDefault();view.zoom=Math.max(.45,Math.min(1.8,view.zoom-event.deltaY*.001));view.resize();},{passive:false});
+function pause(){clearInput();if(!ui.panel&&!simulation.dead&&!simulation.won)ui.toggle('pause');}
+window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
+const down=(...names:string[])=>Number(names.some(n=>keys.has(n)));
+function step(dt:number){
+ const sx=down('d','arrowright')-down('a','arrowleft')+mobile.x,sy=down('s','arrowdown')-down('w','arrowup')+mobile.y;
+ simulation.player.aiming=aiming&&!simulation.driving&&simulation.weapon==='rifle'&&!simulation.paused&&!simulation.dead;
+ if(simulation.player.aiming||firing)view.aim(pointer.x,pointer.y);
+ simulation.update(dt,{x:sx+sy,y:sy-sx,steer:sx,throttle:-sy,run:keys.has('shift'),sneak:keys.has('c')});
+ if(firing&&!ui.panel&&!simulation.paused)simulation.attack();
+ crosshair.hidden=!simulation.player.aiming;crosshair.style.left=pointer.x+'px';crosshair.style.top=pointer.y+'px';canvas.style.cursor=simulation.player.aiming?'none':'';
+ audio.update(simulation);view.render(simulation.paused?0:dt,sx);ui.update();lootPanel.update();
 }
-const game=new Phaser.Game({type:Phaser.AUTO,parent:'game',width:window.innerWidth,height:window.innerHeight,backgroundColor:'#45533b',render:{antialias:true,pixelArt:false},scale:{mode:Phaser.Scale.RESIZE,autoCenter:Phaser.Scale.CENTER_BOTH},scene:[World],audio:{noAudio:true}});
+let last=performance.now(),manualUntil=0;
+function frame(now:number){const dt=Math.min(.05,(now-last)/1000);last=now;if(now>=manualUntil)step(dt);requestAnimationFrame(frame);}
+requestAnimationFrame(frame);
+Object.assign(window,{advanceTime:(ms:number)=>{manualUntil=performance.now()+100;const steps=Math.max(1,Math.ceil(ms/(1000/60)));for(let i=0;i<steps;i++)step(ms/1000/steps);}});
 // Read-only state snapshot for accessibility and automated playtesting.
-Object.assign(window,{render_game_to_text:()=>JSON.stringify({coordinates:'World tile coordinates, +x southeast, +y southwest',player:simulation.player,vehicle:simulation.vehicle,driving:simulation.driving,inventory:simulation.bag,crates:simulation.crates,openCrate:lootPanel.crate?.id,weapon:simulation.weapon,ammo:simulation.ammo,reserve:simulation.reserve,kills:simulation.kills,searched:simulation.searched,paused:simulation.paused,dead:simulation.dead,won:simulation.won,nearHouse:simulation.nearHouse()?.name,inside:simulation.inside(simulation.player)?.name,zombies:simulation.zombies.map(z=>({x:z.x,y:z.y,hp:z.hp,alert:z.alert})),regions:simulation.world.active.map(r=>r.key),visitedRegions:simulation.world.cache.size,houses:simulation.houses.map(h=>({name:h.name,x:h.x,y:h.y,door:h.door,searched:h.searched})),elapsed:simulation.elapsed}),game});
+Object.assign(window,{render_game_to_text:()=>JSON.stringify({coordinates:'World tile coordinates, +x southeast, +y southwest',player:simulation.player,vehicle:simulation.vehicle,driving:simulation.driving,inventory:simulation.bag,crates:simulation.crates,openCrate:lootPanel.crate?.id,weapon:simulation.weapon,ammo:simulation.ammo,reserve:simulation.reserve,kills:simulation.kills,searched:simulation.searched,paused:simulation.paused,dead:simulation.dead,won:simulation.won,nearHouse:simulation.nearHouse()?.name,inside:simulation.inside(simulation.player)?.name,zombies:simulation.zombies.map(z=>({x:z.x,y:z.y,hp:z.hp,alert:z.alert,diedAt:z.diedAt,deathCause:z.deathCause})),regions:simulation.world.active.map(r=>r.key),renderer:'three',visibilityRadius:SIGHT_RADIUS,visualHeading:view.cars.get(simulation.vehicle.id)?.root.rotation.y,actorPose:{leftLeg:view.player.legs[0].rotation.x,rightLeg:view.player.legs[1].rotation.x},zoom:view.zoom,visitedRegions:simulation.world.cache.size,houses:simulation.houses.map(h=>({name:h.name,x:h.x,y:h.y,door:h.door,searched:h.searched})),elapsed:simulation.elapsed}),game:view});
+
+
+}
+void boot().catch(error=>{console.error(error);const loading=document.querySelector('.asset-loading');if(loading)loading.textContent='Artwork could not load. Please refresh to retry.';});
