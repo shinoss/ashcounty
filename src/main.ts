@@ -26,11 +26,15 @@ const crosshair=document.createElement('div');crosshair.className='aim-crosshair
 function clearInput(){keys.clear();firing=false;aiming=false;mobile.x=mobile.y=0;}
 const objectMenu=new ObjectMenu(simulation,clearInput);
 window.addEventListener('keydown',event=>{
+ // Host-level Escape shortcuts may run before web content sees the key; P is the reliable pause binding.
+ if(event.key==='Escape'){event.preventDefault();event.stopPropagation();if(event.repeat)return;if(objectMenu.blocking){objectMenu.dismiss();return;}}
  if(objectMenu.blocking)return;
+ if(event.ctrlKey||event.metaKey||event.altKey)return;
  if(event.key==='Escape'&&!objectMenu.menu.hidden){objectMenu.close();return;}
  if(event.key==='Escape'&&simulation.survival.pickupJob){simulation.survival.cancel();return;}
- if(event.target instanceof HTMLElement&&event.target.closest('input,select,textarea')&&event.key!=='Escape')return;
+ if(event.target instanceof HTMLElement&&event.target.closest('input,select,textarea,[contenteditable=true]')&&event.key!=='Escape')return;
  const k=event.key.toLowerCase();if([' ','arrowup','arrowdown','arrowleft','arrowright'].includes(k))event.preventDefault();keys.add(k);if(event.repeat)return;
+ if(k==='p'){event.preventDefault();clearInput();objectMenu.close();if(lootPanel.crate)lootPanel.close();ui.toggle('pause');return;}
  if(k==='escape'){clearInput();if(!ui.panel&&simulation.survival.active){simulation.survival.cancel();return;}if(lootPanel.crate){lootPanel.close();return;}if(simulation.paused&&!ui.panel)simulation.paused=false;else ui.toggle(ui.panel||'pause');return;}
  if(['i','m','b'].includes(k)){clearInput();ui.toggle(({i:'inventory',m:'map',b:'workshop'} as Record<string,string>)[k]);return;}
  if(ui.panel)return;
@@ -59,13 +63,13 @@ window.addEventListener('mouseup',event=>{if(event.button===0)firing=false;if(ev
 canvas.addEventListener('pointercancel',clearInput);
 document.querySelector('#ui')!.addEventListener('pointerdown',()=>{firing=false;aiming=false;},true);
 canvas.addEventListener('wheel',event=>{event.preventDefault();view.zoom=Math.max(.45,Math.min(1.8,view.zoom-event.deltaY*.001));view.resize();},{passive:false});
-function pause(){clearInput();if(!ui.panel&&!simulation.dead&&!simulation.won)ui.toggle('pause');}
+function pause(){clearInput();if(!simulation.dead&&!simulation.won&&ui.panel!=='pause')ui.toggle('pause');}
 window.addEventListener('blur',pause);document.addEventListener('visibilitychange',()=>{if(document.hidden)pause();});
 const down=(...names:string[])=>Number(names.some(n=>keys.has(n)));
 function step(dt:number){
  if(simulation.survival.closeWorkshop){simulation.survival.closeWorkshop=false;clearInput();if(ui.panel)ui.toggle(ui.panel);}
  if(simulation.survival.placing)simulation.survival.cursor=view.groundPoint(pointer.x,pointer.y);
- const sx=down('d','arrowright')-down('a','arrowleft')+mobile.x,sy=down('s','arrowdown')-down('w','arrowup')+mobile.y;
+ const sx=ui.panel?0:down('d','arrowright')-down('a','arrowleft')+mobile.x,sy=ui.panel?0:down('s','arrowdown')-down('w','arrowup')+mobile.y;
  simulation.player.aiming=aiming&&!simulation.driving&&simulation.weapon==='rifle'&&!simulation.paused&&!simulation.dead;
  if(simulation.player.aiming||firing)view.aim(pointer.x,pointer.y);
  simulation.update(dt,{x:sx+sy,y:sy-sx,steer:sx,throttle:-sy,run:keys.has('shift'),sneak:keys.has('c')});

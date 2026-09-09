@@ -93,6 +93,8 @@ export async function loadSprites(){
   const tile=cut(movable,i%3*movable.width/3,Math.floor(i/3)*movable.height/3,movable.width/3,movable.height/3);
   itemImages['furniture:'+kind]=transparentIcon(tile).toDataURL();
  }
+ const gear=new Image();gear.src=ASSET_ROOT+'gear-utilities.png';await gear.decode();
+ for(const [i,kind] of ['helmet','kevlar','furniture:washer'].entries())itemImages[kind]=trimmed(transparentIcon(cut(gear,i*gear.width/3,0,gear.width/3,gear.height))).toDataURL();
  for(const [generic,kind] of Object.entries({water:'Water',food:'Beans',bandage:'Bandage',wood:'Plank',ammo:'Ammo'}))itemImages[generic]=itemImages[kind];
 
 }

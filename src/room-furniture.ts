@@ -6,7 +6,8 @@ import type {Solid} from './collision';
 export function furnish(parent:T.Group,h:House,b:Solid){
  const group=new T.Group();group.position.set(b.x-h.x,0,b.y-h.y);parent.add(group);const {w,d,height:y,kind}=b;
  const add=(size:number[],at:number[],tile:number,atlas='furniture'):T.Mesh=>{const m=box(group,size,at,'#827e6b');m.material=mat(atlas,tile);return m;};
- if(kind==='sofa'||kind==='booth'){const tile=kind==='booth'?1:(h.design||0)%2?3:0;add([w,.3,d],[w/2,.35,d/2],tile);add([w,.65,.17],[w/2,.53,.085],tile);for(const x of [.1,w-.1])add([.2,.5,d],[x,.45,d/2],tile);}
+ if(kind==='washer'){add([w,y,d],[w/2,y/2,d/2],10);const rim=new T.Mesh(new T.CylinderGeometry(.32,.32,.06,16),mat('furniture',10));rim.rotation.x=Math.PI/2;rim.position.set(w/2,.48,d+.03);group.add(rim);const glass=new T.Mesh(new T.CircleGeometry(.24,16),new T.MeshLambertMaterial({color:'#354950'}));glass.position.set(w/2,.48,d+.07);group.add(glass);}
+ else if(kind==='sofa'||kind==='booth'){const tile=kind==='booth'?1:(h.design||0)%2?3:0;add([w,.3,d],[w/2,.35,d/2],tile);add([w,.65,.17],[w/2,.53,.085],tile);for(const x of [.1,w-.1])add([.2,.5,d],[x,.45,d/2],tile);}
  else if(kind==='bed'){add([w,.22,d],[w/2,.25,d/2],13);add([w-.08,.16,d-.1],[w/2,.44,d/2],h.kind==='clinic'?2:(h.design||0)%2?14:15);add([w-.2,.12,.35],[w/2,.57,.3],2);add([w,.8,.12],[w/2,.4,.06],4);}
  else if(['bookshelf','shelf','medicine','toolchest','locker','cabinet','counter'].includes(kind)){
   const tile=kind==='bookshelf'?8:kind==='medicine'?9:kind==='shelf'?8:kind==='toolchest'?7:kind==='locker'?10:kind==='counter'?(h.design||0)%2?6:4:(h.design||0)%2?5:4;

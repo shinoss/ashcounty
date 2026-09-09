@@ -79,3 +79,11 @@
 .pause-resume{background:#39482d;color:var(--hud-text)}.pause-resume:hover{background:#465638}.pause-resume kbd{font:9px 'DM Sans',sans-serif;color:#b5c2a5;border:1px solid #6b7d59;padding:2px 5px}
 .pause-panel .pause-restart{margin-top:8px;background:transparent;color:var(--hud-muted);border-color:transparent}.pause-panel .pause-restart:hover{background:#293223;color:var(--hud-text)}
 .pause-panel button:focus-visible{outline:1px solid #adc087;outline-offset:2px}
+
+.hotbar button[hidden]{display:none}.empty-gear strong{font:500 11px 'DM Sans',sans-serif;color:#d2d9bd}.gear-paused{color:#d4b27a}
+
+.modal.under-attack{box-shadow:inset 0 0 80px #b3443980}.gear-vitals b{font-weight:inherit}
+
+.empty-gear .item-sprite{width:58px;height:44px;object-fit:contain;margin:4px auto;display:block}.empty-gear{height:auto;min-height:110px}.empty-gear small{line-height:1.4}
+
+.armor-slot .equipped-armor{width:100%;padding:0;cursor:grab;touch-action:none;user-select:none}.equipped-armor strong,.equipped-armor small{display:block}.armor-slot:has(.equipped-armor):hover{border-color:#b5c18d}.equipped-armor.gear-drag-ghost{border:1px solid #b5c18d;padding:6px}.equipped-armor.gear-drag-ghost .item-sprite{width:58px;height:44px;object-fit:contain}.armor-slot.empty-gear{display:block}

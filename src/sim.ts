@@ -28,6 +28,7 @@ export class Simulation {
  doorSound={serial:0,open:false};
  stairTravel:{house:House;base:number;progress:number}|undefined;
  get playerElevation(){return this.stairTravel?(this.stairTravel.base+this.stairTravel.progress)*FLOOR_HEIGHT:this.player.floor*FLOOR_HEIGHT;}
+ armor={kevlar:100,helmet:100};armorEquipped={kevlar:true,helmet:true};
  player={floor:0,climbing:0,x:23.2,y:23.7,hp:100,stamina:MAX_STAMINA,hunger:82,thirst:76,angle:1.2,moving:false,sneaking:false,running:false,distance:0,gait:0,exhausted:false,aiming:false};
  world=new ProceduralWorld(houses);
  houses=houses;
@@ -59,14 +60,14 @@ export class Simulation {
   continue;
  }
  const oldX=z.x,oldY=z.y,d=Math.hypot(p.x-z.x,p.y-z.y);const shelter=this.inside(p),concealed=(z.floor||0)!==p.floor||!!shelter&&!shelter.door&&this.inside(z)!==shelter;z.alert=!concealed&&d<(input.sneak?3:5.5)+this.sound*.3&&this.clearSight(z,p);
- if(z.hit>0){this.move(z,(z.pushX||0)*dt,(z.pushY||0)*dt);z.pushX=(z.pushX||0)*Math.exp(-dt*7);z.pushY=(z.pushY||0)*Math.exp(-dt*7);}else if(z.alert&&d>.55){this.move(z,(p.x-z.x)/d*.82*dt,(p.y-z.y)/d*.82*dt);}else if(!z.alert){this.move(z,(Math.cos(this.elapsed*.14+z.phase)*.24+((z.homeX??z.x)-z.x)*.12)*dt,(Math.sin(this.elapsed*.12+z.phase)*.24+((z.homeY??z.y)-z.y)*.12)*dt);}
+ if(z.hit>0){this.move(z,(z.pushX||0)*dt,(z.pushY||0)*dt);z.pushX=(z.pushX||0)*Math.exp(-dt*7);z.pushY=(z.pushY||0)*Math.exp(-dt*7);}else if(z.alert&&d>.55){this.move(z,(p.x-z.x)/d*.902*dt,(p.y-z.y)/d*.902*dt);}else if(!z.alert){this.move(z,(Math.cos(this.elapsed*.14+z.phase)*.264+((z.homeX??z.x)-z.x)*.132)*dt,(Math.sin(this.elapsed*.12+z.phase)*.264+((z.homeY??z.y)-z.y)*.132)*dt);}
  this.pushFromCars(z);const traveled=Math.hypot(z.x-oldX,z.y-oldY);z.moving=traveled>.00001;z.gait=(z.gait||0)+traveled/1.1;if(z.moving&&z.hit<=0)z.angle=Math.atan2(z.y-oldY,z.x-oldX);// Occupants can only be reached after sustained contact beside a window on a nearly stopped car.
  const v=this.vehicle,c=Math.cos(v.angle),sn=Math.sin(v.angle),carDX=z.x-v.x,carDY=z.y-v.y;
  const along=carDX*c+carDY*sn,side=-carDX*sn+carDY*c;
  const atWindow=this.driving&&Math.abs(v.speed)<.6&&Math.abs(along)<.8&&Math.abs(side)>=.85&&Math.abs(side)<1.18&&!concealed&&z.hit<=0;
  z.carContact=atWindow?(z.carContact||0)+dt:0;
  const atCar=atWindow&&z.carContact>=2.5;
- if(!concealed&&(atCar||!this.driving&&d<.8)&&this.clearSight(z,p)&&z.cooldown<=0&&z.hit<=0){p.hp-=atCar?3:9;z.cooldown=atCar?3:1.4;if(atCar)z.carContact=0;this.damageTime=.3;this.say(atCar?'They are reaching through the windows. Drive away!':'You were scratched. Create some distance.');}}
+ if(!concealed&&(atCar||!this.driving&&d<.8)&&this.clearSight(z,p)&&z.cooldown<=0&&z.hit<=0){const raw=atCar?3:9,protection=(this.armorEquipped.kevlar&&this.armor.kevlar>0?.35:0)+(this.armorEquipped.helmet&&this.armor.helmet>0?.15:0);p.hp-=raw*(1-protection);if(this.armorEquipped.kevlar)this.armor.kevlar=Math.max(0,this.armor.kevlar-raw*.7);if(this.armorEquipped.helmet)this.armor.helmet=Math.max(0,this.armor.helmet-raw*.3);z.cooldown=atCar?3:1.4;if(atCar)z.carContact=0;this.damageTime=.3;this.say(atCar?'They are reaching through the windows. Drive away!':'You were scratched. Create some distance.');}}
  if(p.hp<=0){p.hp=0;this.dead=true;this.say('Every life leaves a trace.');}}
  equip(weapon:'bat'|'rifle',fromInventory=false){if((this.paused&&!fromInventory)||this.dead||this.won)return;this.weapon=weapon;this.player.aiming=false;this.attackTime=0;this.pendingMelee=undefined;this.shoveTime=0;this.pendingShove=undefined;this.say(weapon==='rifle'?this.firearm.name+' equipped · Hold right mouse to aim · Hold left mouse to fire':'Bat equipped · '+this.firearm.name+' slung on your back');}
  reload(){if(this.paused||this.dead||this.won||this.weapon!=='rifle'||this.attackCooldown>0)return;const rounds=Math.min(this.firearm.capacity-this.ammo,this.reserve);if(!rounds){this.say(this.ammo===this.firearm.capacity?'Magazine is full.':'No spare ammunition.');return;}this.ammo+=rounds;this.reserve-=rounds;this.attackCooldown=Math.max(.4,.9-this.survival.level('shooting')*.06);this.say(this.firearm.name+' reloaded.');}
@@ -124,17 +125,25 @@ export class Simulation {
  vehicleBlocked(x:number,y:number){return !countyContains(x,y,.3)||this.wallBlocked(x,y)||[...this.solids.near(x,y,.5)].some(b=>pointIn(b,x,y,.15))||this.houses.some(h=>x>h.x-.4&&x<h.x+h.w+.4&&y>h.y-.4&&y<h.y+h.d+.4);}
  toggleVehicle(){if(this.player.floor)return;if(this.paused||this.dead||this.won)return;if(!this.driving){const candidate=this.vehicles.filter(v=>Math.hypot(this.player.x-v.x,this.player.y-v.y)<=3.5).sort((a,b)=>Math.hypot(this.player.x-a.x,this.player.y-a.y)-Math.hypot(this.player.x-b.x,this.player.y-b.y))[0];if(!candidate){this.say('Move closer to a vehicle, then press F.');return;}this.vehicle=candidate;this.driving=true;this.player.x=this.vehicle.x;this.player.y=this.vehicle.y;this.player.aiming=false;this.say('W / S · Accelerate / reverse    A / D · Steer    F · Exit');}else{if(Math.abs(this.vehicle.speed)>1){this.say('Stop the car before getting out.');return;}for(const offset of [Math.PI/2,-Math.PI/2,Math.PI,0]){const angle=this.vehicle.angle+offset,x=this.vehicle.x+Math.cos(angle)*2,y=this.vehicle.y+Math.sin(angle)*2;if(!this.vehicleBlocked(x,y)&&!this.vehicles.some(v=>carContains(v,x,y,.24))){this.driving=false;this.vehicle.speed=0;this.player.x=x;this.player.y=y;this.say('You step out of the vehicle.');return;}}this.say('No clear space to get out.');}}
  drive(dt:number,steer:number,throttle:number){
- const v=this.vehicle,handling=VEHICLES[v.kind||'wagon'];steer=Math.max(-1,Math.min(1,steer));throttle=Math.max(-1,Math.min(1,throttle));v.speed=Math.max(-5,Math.min(handling.speed*(.65+(v.condition??100)*.0035),(v.speed+throttle*handling.accel*dt)*Math.exp(-dt*(throttle?.25:2.2))));
+ const v=this.vehicle,handling=VEHICLES[v.kind||'wagon'];if((v.condition??100)<=0){v.speed=0;this.player.x=v.x;this.player.y=v.y;return;}steer=Math.max(-1,Math.min(1,steer));throttle=Math.max(-1,Math.min(1,throttle));v.speed=Math.max(-5,Math.min(handling.speed*(.65+(v.condition??100)*.0035),(v.speed+throttle*handling.accel*dt)*Math.exp(-dt*(throttle?.25:2.2))));
  const turn=steer*handling.steer*dt*Math.min(1,Math.abs(v.speed)/2)*(v.speed<0?-1:1),distance=v.speed*dt,steps=Math.max(1,Math.ceil((Math.abs(distance)+Math.abs(turn)*1.8)/.10));
  for(let i=0;i<steps;i++){
   const angle=v.angle+turn/steps,x=v.x+Math.cos(angle)*distance/steps,y=v.y+Math.sin(angle)*distance/steps,candidate={...v,x,y,angle};
   const collision=!countyContains(x,y,2)||this.survival.buildings.some(b=>b.floor===0&&this.survival.blocks(b)&&carOverlap(candidate,this.survival.solid(b)))||[...this.solids.near(x,y,2)].some(b=>carOverlap(candidate,b))||this.houses.some(h=>carOverlap(candidate,{...h,height:3,kind:'house'}))||this.vehicles.some(other=>other!==v&&[-1.4,0,1.4].some(f=>[-.7,.7].some(l=>carContains(other,x+Math.cos(angle)*f-Math.sin(angle)*l,y+Math.sin(angle)*f+Math.cos(angle)*l,.12))));
-  if(collision){v.condition=Math.max(15,(v.condition??100)-Math.abs(v.speed)*1.2);v.speed=0;break;}v.x=x;v.y=y;v.angle=angle;
+  if(collision){
+   const impact=Math.abs(v.speed);
+   // Parking nudges are harmless. Damage grows gradually and a single crash is capped.
+   if(impact>2){const force=impact-2,damage=Math.min(24,.45*force+.022*force*force);v.condition=Math.max(0,(v.condition??100)-damage);
+    const injury=Math.min(32,Math.max(0,impact-7)**2*.08);if(injury>0){this.player.hp=Math.max(0,this.player.hp-injury);this.damageTime=.55;}
+    this.sound=Math.max(this.sound,30);
+    this.say((v.condition<=0?'Vehicle wrecked. Exit and use a repair kit.':'Collision! Vehicle condition: '+Math.ceil(v.condition)+'%')+(injury>=1?' · You lost '+Math.ceil(injury)+' health.':''));
+   }v.speed=0;break;
+  }v.x=x;v.y=y;v.angle=angle;
   for(const z of this.zombies){if(z.hp<=0||z.floor||!carContains(v,z.x,z.y,.23))continue;if(Math.abs(v.speed)>2.5)this.killZombie(z,'vehicle',v.angle+(v.speed<0?Math.PI:0));else this.pushFromCars(z);}
  }
  this.world.relocateVehicle(v);this.player.x=v.x;this.player.y=v.y;this.player.angle=v.angle;this.sound=Math.max(this.sound,18);
  }
- canLoot(crate:LootCrate){if((crate.floor||0)!==this.player.floor||this.driving||this.dead||this.won||Math.hypot(this.player.x-crate.x,this.player.y-crate.y)>3||this.inside(this.player)!==this.inside(crate))return false;for(let t=.1;t<1;t+=.1)if(this.wallBlocked(this.player.x+(crate.x-this.player.x)*t,this.player.y+(crate.y-this.player.y)*t))return false;return true;}
+ canLoot(crate:LootCrate){const home=this.inside(crate);if(!this.crates.includes(crate)||crate.furnitureId&&home?.removedFurniture?.[(crate.floor||0)+':'+crate.furnitureId])return false;if((crate.floor||0)!==this.player.floor||this.driving||this.dead||this.won||Math.hypot(this.player.x-crate.x,this.player.y-crate.y)>3||this.inside(this.player)!==this.inside(crate))return false;for(let t=.1;t<1;t+=.1)if(this.wallBlocked(this.player.x+(crate.x-this.player.x)*t,this.player.y+(crate.y-this.player.y)*t))return false;return true;}
  loot(crateId:string,itemId?:string){const crate=this.crates.find(c=>c.id===crateId);if(!crate||this.paused||!this.canLoot(crate)){this.say('Move closer to the crate to collect supplies.');return 0;}let taken=0;for(const item of crate.items){if(itemId&&item.id!==itemId)continue;if(item.quantity<=0)continue;const quantity=item.quantity+(this.survival.level('scavenging')>0&&Math.random()<this.survival.level('scavenging')*.08?1:0);if(item.kind==='Ammo')this.reserve+=quantity;else this.bag[item.kind]=(this.bag[item.kind]||0)+quantity;item.quantity=0;taken+=quantity;this.survival.gain('scavenging',2);}this.say(taken?`Packed ${taken} supplies. Open I to organize your inventory.`:'This crate is empty.');return taken;}
  clearSight(a:Point,b:Point){if((a.floor||0)!==(b.floor||0))return false;const dx=b.x-a.x,dy=b.y-a.y,d=Math.hypot(dx,dy);if(d<.01)return true;return ![...this.houses.flatMap(walls),...this.survival.buildings.filter(b=>b.floor===(a.floor||0)&&this.survival.blocksSight(b)).map(b=>this.survival.solid(b))].some(w=>rayBox(a.x,a.y,dx/d,dy/d,w)<d-.1);}
  toggleDoor(h=this.nearHouse()){if(this.player.floor){this.say('Go downstairs to reach the front door.');return;}if(!h||this.driving||this.paused||this.dead||this.won)return;const d=this.doorPoint(h);if(this.inside(this.player)!==h&&Math.hypot(this.player.x-d.x,this.player.y-d.y)>2){this.say('Move closer to the front door.');return;}h.door=!h.door;this.doorSound={serial:this.doorSound.serial+1,open:h.door};this.say(h.door?'Front door opened.':'Front door closed · Hidden from outside zombies.');}
@@ -159,7 +168,7 @@ export class Simulation {
   return true;
  }
  selectGun(kind:GunKind){if(!this.ownedGuns.includes(kind)||this.dead||this.driving)return;this.reserve+=this.ammo;this.gun=kind;this.ammo=Math.min(this.firearm.capacity,this.reserve);this.reserve-=this.ammo;this.equip('rifle',true);this.attackCooldown=.8;this.say(this.firearm.name+' equipped.');}
- use(item:string){if(this.dead||this.won)return;if(this.survival.packed.has(item)){this.survival.placeFromInventory(item);return;}if(!this.bag[item]){this.say(`No ${item.toLowerCase()} left. Search the houses.`);return;}const foundGun=({Pistol:'pistol',Shotgun:'shotgun',HuntingRifle:'hunting',SMG:'smg'} as Record<string,GunKind>)[item];
+ use(item:string){if(this.dead||this.won)return;if(item==='helmet'||item==='kevlar'){this.say(this.inventory.equipArmor(item)?'Armor equipped.':'That armor is already equipped or unavailable.');return;}if(this.survival.packed.has(item)){this.survival.placeFromInventory(item);return;}if(!this.bag[item]){this.say(`No ${item.toLowerCase()} left. Search the houses.`);return;}const foundGun=({Pistol:'pistol',Shotgun:'shotgun',HuntingRifle:'hunting',SMG:'smg'} as Record<string,GunKind>)[item];
  if(foundGun){if(!this.ownedGuns.includes(foundGun))this.ownedGuns.push(foundGun);this.selectGun(foundGun);}
  else if(item==='Manual'||item==='MedicalGuide'){this.survival.gain(item==='Manual'?'carpentry':'firstaid',35);this.say('Read the guide. New techniques learned.');}
  else if(item==='EnergyBar'||item==='Stew'){this.player.hunger=Math.min(100,this.player.hunger+(item==='Stew'?60+this.survival.level('cooking')*5:20));this.player.stamina=Math.min(MAX_STAMINA,this.player.stamina+35);if(item==='Stew')this.player.thirst=Math.min(100,this.player.thirst+15);this.say('A welcome meal.');}
