@@ -2,6 +2,10 @@
 
 An isometric zombie-survival game built with Three.js, TypeScript, and Vite. Inspired by Project Zomboid.
 
+To play, run `npm run dev`
+
 ![Ash County gameplay screenshot](screenshot.png)
 
-![Ash County gameplay screenshot](screenshot2.png)
+![Inside room](screenshot2.png)
+
+![Menu](screenshot3.png)
