@@ -27,6 +27,37 @@ function cleanFrame(a:HTMLCanvasElement){
  for(let p=0;p<w*h;p++)if(!keep[p])d[p*4+3]=0;c.putImageData(im,0,0);return a;
 }
 export function trimmed(a:HTMLCanvasElement){const b=bounds(a);return cut(a,b.x,b.y,b.w,b.h);}
+/** Remove the connected olive studio matte from UI atlas cells, preserving enclosed
+ * dark object details. The resulting PNG uses alpha, so row highlights show through. */
+function transparentIcon(a:HTMLCanvasElement){
+ const c=a.getContext('2d',{willReadFrequently:true})!,im=c.getImageData(0,0,a.width,a.height),d=im.data,w=a.width,h=a.height;
+ const samples:number[][]=[];
+ for(const [x,y] of [[2,2],[w-3,2],[2,h-3],[w-3,h-3]]){const i=(y*w+x)*4;samples.push([d[i],d[i+1],d[i+2]]);}
+ const bg=[0,1,2].map(k=>samples.map(s=>s[k]).sort((a,b)=>a-b)[1]);
+ const matte=(p:number)=>{const i=p*4,r=d[i],g=d[i+1],b=d[i+2];return d[i+3]<8||
+  Math.abs((g-r)-(bg[1]-bg[0]))<=5&&Math.abs((g-b)-(bg[1]-bg[2]))<=5&&
+  Math.max(r,g,b)<Math.max(...bg)+27&&Math.min(r,g,b)>Math.min(...bg)-24;};
+ const removed=new Uint8Array(w*h),queue=new Int32Array(w*h);let head=0,tail=0;
+ const visit=(p:number)=>{if(!removed[p]&&matte(p)){removed[p]=1;queue[tail++]=p;}};
+ for(let x=0;x<w;x++){visit(x);visit((h-1)*w+x);}for(let y=1;y<h-1;y++){visit(y*w);visit(y*w+w-1);}
+ while(head<tail){const p=queue[head++],x=p%w;if(x>0)visit(p-1);if(x<w-1)visit(p+1);if(p>=w)visit(p-w);if(p<w*(h-1))visit(p+w);}
+ // Unmix the narrow antialiased fringe against a nearby intact foreground pixel.
+ const original=new Uint8ClampedArray(d);
+ for(let p=0;p<w*h;p++){
+  const i=p*4;if(removed[p]){d[i+3]=0;continue;}
+  const x=p%w,y=Math.floor(p/w);let edge=false;
+  for(const q of [x>0?p-1:p,x<w-1?p+1:p,y>0?p-w:p,y<h-1?p+w:p])if(removed[q])edge=true;
+  if(!edge)continue;
+  let best=p,bestDist=0;
+  for(let yy=Math.max(0,y-2);yy<=Math.min(h-1,y+2);yy++)for(let xx=Math.max(0,x-2);xx<=Math.min(w-1,x+2);xx++){
+   const q=yy*w+xx;if(removed[q])continue;const dist=bg.reduce((n,v,k)=>n+(original[q*4+k]-v)**2,0);if(dist>bestDist){best=q;bestDist=dist;}
+  }
+  if(bestDist<100)continue;
+  const alpha=Math.max(0,Math.min(1,bg.reduce((n,v,k)=>n+(original[i+k]-v)*(original[best*4+k]-v),0)/bestDist));
+  if(alpha>.12&&alpha<.98){d[i+3]=Math.round(original[i+3]*alpha);for(let k=0;k<3;k++)d[i+k]=Math.max(0,Math.min(255,(original[i+k]-bg[k]*(1-alpha))/alpha));}
+ }
+ c.putImageData(im,0,0);return a;
+}
 export async function loadSprites(){
  await Promise.all(['props','materials','furniture','survivor','rifle','zombie','cars','items','fx'].map(async name=>{
  const img=new Image();img.src=ASSET_ROOT+name+'.png';await img.decode();const rows=name==='materials'||name==='furniture'?3:name==='cars'||name==='items'||name==='fx'?2:4;
@@ -45,6 +76,25 @@ export async function loadSprites(){
   c.drawImage(a,b.x,b.y,b.w,b.h,48-(anchorX-b.x)*scale,100-(anchorBottom-b.y)*scale,b.w*scale,b.h*scale);return out;});
  }
  for(const [i,name]of ['rifle','bat','water','food','ammo','bandage','wood','bag'].entries()){const a=canvas(160,120),c=a.getContext('2d')!,s=sheets.items[i],scale=Math.min(150/s.width,108/s.height);c.drawImage(s,(160-s.width*scale)/2,(120-s.height*scale)/2,s.width*scale,s.height*scale);itemImages[name]=trimmed(a).toDataURL();}
+ const atlas=new Image();atlas.src=ASSET_ROOT+'county-items.png';await atlas.decode();
+ const kinds=['Apple','Cheese','Sandwich','Yogurt','Carrots','Milk','Beans','Water','Bandage','Plank','Ammo','Nails','Scrap','Cloth','Tape','Electronics','Charcoal','Hammer','Wrench','Manual','MedicalGuide','RepairKit','EnergyBar','Painkillers','Stew','Pistol','Shotgun','HuntingRifle','SMG','bag'];
+ kinds.forEach((kind,i)=>{const tile=cut(atlas,i%6*atlas.width/6,Math.floor(i/6)*atlas.height/5,atlas.width/6,atlas.height/5);itemImages[kind]=transparentIcon(tile).toDataURL();});
+ const structures=new Image();structures.src=ASSET_ROOT+'crafting-structures.png';await structures.decode();
+ for(const [i,kind] of ['wall','bench','barrel','bed','fire','lure'].entries()){
+  const tile=cut(structures,i%3*structures.width/3,Math.floor(i/3)*structures.height/2,structures.width/3,structures.height/2);
+  itemImages['build:'+kind]=transparentIcon(tile).toDataURL();
+ }
+ const basePieces=new Image();basePieces.src=ASSET_ROOT+'base-pieces.png';await basePieces.decode();
+ for(const [i,kind] of ['floor','door','roof'].entries())itemImages['build:'+kind]=transparentIcon(cut(basePieces,i*basePieces.width/3,0,basePieces.width/3,basePieces.height)).toDataURL();
+ // Verified indices in the original 4-column furniture sheet.
+ for(const [kind,index] of Object.entries({counter:0,cabinet:0,fridge:3,table:4,chair:5,sofa:6,bed:7,nightstand:10,plant:11}))itemImages['furniture:'+kind]=sheets.furniture[index].toDataURL();
+ const movable=new Image();movable.src=ASSET_ROOT+'movable-furniture-icons.png';await movable.decode();
+ for(const [i,kind] of ['tv','desk','bookshelf','shelf','locker','medicine','toolchest','pew','booth'].entries()){
+  const tile=cut(movable,i%3*movable.width/3,Math.floor(i/3)*movable.height/3,movable.width/3,movable.height/3);
+  itemImages['furniture:'+kind]=transparentIcon(tile).toDataURL();
+ }
+ for(const [generic,kind] of Object.entries({water:'Water',food:'Beans',bandage:'Bandage',wood:'Plank',ammo:'Ammo'}))itemImages[generic]=itemImages[kind];
+
 }
 export function itemArt(name:string){return itemImages[name]?`<img class="item-sprite" src="${itemImages[name]}" alt="" draggable="false">`:'';}
 export function drawFit(c:CanvasRenderingContext2D,s:HTMLCanvasElement,x:number,y:number,w:number,h:number){const k=Math.min(w/s.width,h/s.height);c.drawImage(s,x-s.width*k/2,y-s.height*k,s.width*k,s.height*k);}

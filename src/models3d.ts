@@ -25,7 +25,7 @@ const wheelGeometry=new T.CylinderGeometry(.32,.32,.19,12);
 const shadowGeometry=new T.CircleGeometry(1,24);
 const shadowMaterial=new T.MeshBasicMaterial({color:'#202f2a',transparent:true,opacity:.23,depthWrite:false});
 function shadow(parent:T.Object3D,x:number,z:number){const mesh=new T.Mesh(shadowGeometry,shadowMaterial);mesh.rotation.x=-Math.PI/2;mesh.scale.set(x,z,1);mesh.position.y=.055;parent.add(mesh);}
-export type ActorPose={phase:number;moving:boolean;run?:boolean;sneak?:boolean;aim?:boolean;rifle?:boolean;attack?:number;attacking?:boolean;hurt?:number;recoil?:number;gun?:GunKind;time:number};
+export type ActorPose={groundAttack?:boolean;shove?:number;phase:number;moving:boolean;run?:boolean;sneak?:boolean;aim?:boolean;rifle?:boolean;attack?:number;attacking?:boolean;hurt?:number;recoil?:number;gun?:GunKind;time:number};
 export class ActorModel{
  root=new T.Group();body=pivot(this.root,0,0,0);hips=pivot(this.body,0,.94,0);
  torso=pivot(this.hips,0,0,0);legs:T.Group[]=[];knees:T.Group[]=[];arms:T.Group[]=[];elbows:T.Group[]=[];
@@ -120,6 +120,31 @@ export class ActorModel{
     this.bat.rotation.set(.25+strike*weight,.6*wind*weight-1.5*strike*weight,2.7-2.2*strike*weight);
     if(!p.moving){this.legs[0].rotation.x=-.22*weight;this.legs[1].rotation.x=.26*weight;this.knees[0].rotation.x=.2*weight;}
    }
+   if(!this.zombie&&p.attacking&&p.groundAttack){
+    const t=p.attack||0,ease=(v:number)=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
+    const lift=ease(t/.40),strike=ease((t-.44)/.22),recover=ease((t-.76)/.24),weight=1-recover;
+    // Raise both grips above the head, pause, then drive the bat through the floor-facing arc.
+    this.body.rotation.y=0;this.torso.rotation.y=0;
+    this.torso.rotation.x=(-.20*lift+1.12*strike)*weight;
+    this.hips.position.y=(p.sneak?.77:.94)-(.06*lift+.20*strike)*weight;
+    this.bat.position.set(.06-.04*lift*weight,.16+(.68*lift-.72*strike)*weight,.30+(-.18*lift+.25*strike)*weight);
+    this.bat.rotation.set(.25+(-.90*lift+3.05*strike)*weight,0,2.7+(Math.PI-2.7)*lift*weight);
+    const brace=Math.sin(Math.min(1,t/.18)*Math.PI/2)*weight;
+    this.legs[0].rotation.x=-.28*brace;this.legs[1].rotation.x=.25*brace;
+    this.knees[0].rotation.x=(.25+.35*strike)*brace;this.knees[1].rotation.x=(.18+.3*strike)*brace;
+   }
+   if(!this.zombie&&(p.shove||0)>0){
+    const t=1-(p.shove||0)/.78,ease=(v:number)=>{v=Math.max(0,Math.min(1,v));return v*v*(3-2*v);};
+    const brace=ease(t/.27),thrust=ease((t-.27)/.18),release=ease((t-.57)/.43),weight=1-release;
+    this.body.rotation.y=0;this.torso.rotation.y=-.12*brace*weight;
+    this.torso.rotation.x=(-.18*brace+.62*thrust)*weight;
+    this.hips.position.y=(p.sneak?.77:.94)-(.12*brace-.04*thrust)*weight;
+    this.legs[0].rotation.x=-.32*brace*weight;this.legs[1].rotation.x=.3*brace*weight;
+    this.knees[0].rotation.x=.35*brace*weight;this.knees[1].rotation.x=.24*brace*weight;
+    // Pull the two-handed grip into the chest, then extend it with the whole body.
+    this.bat.position.set(.06,.16+.17*brace*weight,.30+(-.14*brace+.31*thrust)*weight);
+    this.bat.rotation.set(.25*(1-brace*weight),0,2.7+(Math.PI/2-2.7)*brace*weight);
+   }
    if(!this.zombie)this.gripBat();
   }
  }
@@ -139,6 +164,16 @@ export class CarModel{
    if(kind==='pickup'){box(this.root,[1.28,.6,1.2],[0,1.12,.35],'#536870');box(this.root,[1.35,.12,1.3],[0,1.47,.35],color);box(this.root,[1.1,.08,1.2],[0,.86,-.85],'#333b3b');for(const x of [-.66,.66])box(this.root,[.12,.3,1.35],[x,.98,-.83],color);}
    else{box(this.root,[1.36,1.05,2.45],[0,1.18,-.3],color);box(this.root,[1.2,.48,.06],[0,1.45,.95],'#536870');for(const x of [-.69,.69])box(this.root,[.02,.48,.6],[x,1.45,.6],'#536870');}
   }else if(kind==='sedan'||kind==='police'){for(const child of this.root.children.slice(cabinStart)){child.position.z*=.75;child.scale.z*=.75;}if(kind==='police'){box(this.root,[1.2,.1,.22],[0,1.62,-.2],'#333333');box(this.root,[.48,.12,.22],[-.3,1.71,-.2],'#a54535');box(this.root,[.48,.12,.22],[.3,1.71,-.2],'#4057a0');for(const x of [-.73,.73])box(this.root,[.025,.25,1.3],[x,.76,0],'#dddccb');}}
+  if(kind==='sports'){
+   for(const child of this.root.children.slice(cabinStart))this.root.remove(child);
+   box(this.root,[1.36,.28,1.35],[0,.95,-.15],'#233a43');
+   box(this.root,[1.29,.08,1.26],[0,1.13,-.24],'#ae2936');
+   box(this.root,[1.45,.14,1.02],[0,.83,1.0],'#c63743');
+   for(const x of [-.24,.24])box(this.root,[.13,.015,1.02],[x,.908,1.0],'#e6dccc');
+   for(const x of [-.59,.59])box(this.root,[.055,.2,.08],[x,.99,-1.35],'#282e30');
+   box(this.root,[1.55,.07,.28],[0,1.10,-1.35],'#262d2f');
+   for(const x of [-.75,.75])box(this.root,[.08,.18,2.5],[x,.43,0],'#b32a37');
+  }
   box(this.root,[1.48,.12,.10],[0,.52,1.60],'#9b9e96');box(this.root,[.58,.17,.025],[0,.72,1.583],'#30383a');
   for(const x of [-.50,.50]){box(this.root,[.30,.16,.035],[x,.75,1.59],'#d9d3a7');box(this.root,[.25,.15,.035],[x,.73,-1.59],'#994f3e');}
   for(const x of [-.73,.73])for(const z of [-1.02,1.02]){const steering=pivot(this.root,x,.35,z);const wheel=pivot(steering,0,0,0);const tire=new T.Mesh(wheelGeometry,material('#262d2b'));tire.rotation.z=Math.PI/2;wheel.add(tire);box(wheel,[.205,.13,.13],[0,0,0],'#929b98');this.wheels.push(wheel);if(z>0)this.front.push(steering);}

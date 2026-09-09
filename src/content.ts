@@ -6,7 +6,7 @@ export const GUNS={
  smg:{name:'Wasp SMG',capacity:24,damage:38,cadence:.085,noise:30,pellets:1,spread:.075,desc:'High fire rate; burns ammunition quickly.'}
 };
 export type GunKind=keyof typeof GUNS;
-export const VEHICLES={wagon:{name:'Station wagon',speed:15,accel:9,steer:2.1},sedan:{name:'Sedan',speed:18,accel:10,steer:2.3},pickup:{name:'Pickup truck',speed:14,accel:8,steer:1.9},van:{name:'Delivery van',speed:12,accel:6,steer:1.6},police:{name:'Police cruiser',speed:21,accel:12,steer:2.4}};
+export const VEHICLES={sports:{name:'Vesper GT sports coupe',speed:27.2,accel:14.4,steer:2.6},wagon:{name:'Station wagon',speed:15,accel:9,steer:2.1},sedan:{name:'Sedan',speed:18,accel:10,steer:2.3},pickup:{name:'Pickup truck',speed:14,accel:8,steer:1.9},van:{name:'Delivery van',speed:12,accel:6,steer:1.6},police:{name:'Police cruiser',speed:21,accel:12,steer:2.4}};
 export type VehicleKind=keyof typeof VEHICLES;
 const item=(name:string,icon:string,category:string,desc:string,weight=.2)=>({name,icon,category,desc,weight,w:1,h:1});
 export const SUPPLIES={
@@ -18,14 +18,17 @@ export const SUPPLIES={
 export type SupplyKind=keyof typeof SUPPLIES;
 export const SKILLS={carpentry:'Carpentry',mechanics:'Mechanics',cooking:'Cooking',firstaid:'First aid',shooting:'Marksmanship',scavenging:'Scavenging'};
 export type Skill=keyof typeof SKILLS;
-export type BuildKind='wall'|'bench'|'barrel'|'bed'|'fire'|'lure';
+export type BuildKind='floor'|'door'|'roof'|'furniture'|'wall'|'bench'|'barrel'|'bed'|'fire'|'lure';
 export type Recipe={name:string;desc:string;cost:Record<string,number>;tool?:string;skill:Skill;level:number;output?:string;amount?:number;build?:BuildKind;station?:BuildKind};
 export const RECIPES:Record<string,Recipe>={
+ floor:{name:'Timber floor',desc:'A walkable 2 × 2 foundation tile. Snap tiles together to lay out your base.',cost:{Plank:2,Nails:1},tool:'Hammer',skill:'carpentry',level:0,build:'floor'},
+ door:{name:'Wooden doorway',desc:'A full-height wall opening with a hinged door. Press E nearby to open or close it.',cost:{Plank:3,Nails:1,Scrap:1},tool:'Hammer',skill:'carpentry',level:0,build:'door'},
+ roof:{name:'Roof panel',desc:'Cover a foundation tile. Panels hide when you stand underneath your base roof.',cost:{Plank:2,Nails:1},tool:'Hammer',skill:'carpentry',level:0,build:'roof'},
  bandage:{name:'Cloth bandage',desc:'Turn spare cloth into dressings.',cost:{Cloth:2},skill:'firstaid',level:0,output:'Bandage'},
  fuel:{name:'Charcoal bundle',desc:'Prepare wood for a cooking fire.',cost:{Plank:1},skill:'cooking',level:0,output:'Charcoal',amount:3},
  repair:{name:'Vehicle repair kit',desc:'Restore a battered vehicle. Requires a workbench.',cost:{Scrap:3,Tape:1},tool:'Wrench',skill:'mechanics',level:0,station:'bench',output:'RepairKit'},
  stew:{name:'Hearty stew',desc:'Cook a filling meal at a campfire.',cost:{Beans:1,Carrots:1,Water:1,Charcoal:1},skill:'cooking',level:0,station:'fire',output:'Stew'},
- wall:{name:'Wooden barricade',desc:'A solid barrier. Zombies can break it down.',cost:{Plank:3,Nails:1},tool:'Hammer',skill:'carpentry',level:0,build:'wall'},
+ wall:{name:'Timber wall',desc:'A two-metre wall that snaps to foundation edges. Blocks movement and sight; zombies can damage it.',cost:{Plank:3,Nails:1},tool:'Hammer',skill:'carpentry',level:0,build:'wall'},
  bench:{name:'Workbench',desc:'Enables repair kits and advanced devices nearby.',cost:{Plank:4,Nails:2},tool:'Hammer',skill:'carpentry',level:0,build:'bench'},
  bed:{name:'Bedroll',desc:'Use with E to recover health and stamina. Time still passes.',cost:{Cloth:4,Tape:1},skill:'carpentry',level:0,build:'bed'},
  fire:{name:'Cooking fire',desc:'Outdoor cooking station. Keep a stock of charcoal.',cost:{Scrap:2,Plank:2},skill:'cooking',level:0,build:'fire'},

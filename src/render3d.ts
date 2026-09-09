@@ -1,3 +1,5 @@
+import type {PickupTarget} from './survival';
+import {RECIPES} from './content';
 import {finishes,varietyMaterial} from './variety-art';
 import {furnish} from './room-furniture';
 import * as T from 'three';
@@ -20,6 +22,7 @@ export class World3D{
  crates=new Map<LootCrate,T.Object3D>();cars=new Map<string,CarModel>();zombies=new Map<Zombie,ActorModel>();player=new ActorModel();
  ray=new T.Raycaster();groundPlane=new T.Plane(new T.Vector3(0,1,0),0);zoom=1.1;lost=false;
  darkness=new Darkness();constructions=new Map<number,T.Group>();blood=new Map<Zombie,T.Group>();bloodGeometry=new T.CircleGeometry(1,12);bloodMaterial=new T.MeshBasicMaterial({color:'#6e1518',transparent:true,opacity:.85,depthWrite:false});
+ exteriorHidden=new Set<T.Object3D>();
  elevation=0;batTrail=new BatTrail();
  playerRevealScene=new T.Scene();playerRevealMeshes:{source:T.Mesh;overlay:T.Mesh}[]=[];
  playerRevealMaterial=new T.MeshBasicMaterial({color:'#e1d9b2',transparent:true,opacity:.7,depthTest:true,depthWrite:false,depthFunc:T.GreaterDepth,polygonOffset:true,polygonOffsetFactor:-1,polygonOffsetUnits:-1});
@@ -43,7 +46,26 @@ export class World3D{
  }
  resize(){const w=innerWidth,h=innerHeight;this.renderer.setSize(w,h);const span=h/(24*this.zoom);this.camera.left=-span*w/h/2;this.camera.right=span*w/h/2;this.camera.top=span/2;this.camera.bottom=-span/2;this.camera.near=.1;this.camera.far=500;this.camera.updateProjectionMatrix();}
  pointer(x:number,y:number){const rect=this.renderer.domElement.getBoundingClientRect();this.ray.setFromCamera(new T.Vector2((x-rect.left)/rect.width*2-1,-(y-rect.top)/rect.height*2+1),this.camera);}
- aim(x:number,y:number){this.pointer(x,y);const at=new T.Vector3();const plane=new T.Plane(new T.Vector3(0,1,0),-(1.25+this.elevation));if(this.ray.ray.intersectPlane(plane,at))this.s.player.angle=Math.atan2(at.z-this.s.player.y,at.x-this.s.player.x);}
+ furniturePoint(x:number,y:number,exact=false){
+  this.pointer(x,y);
+  for(const hit of this.ray.intersectObjects([...this.houses.values()].map(v=>v.group).concat([...this.constructions.values()]),true)){
+   let visible=true;for(let o:T.Object3D|null=hit.object;o;o=o.parent)if(!o.visible)visible=false;if(!visible)continue;
+   for(let o:T.Object3D|null=hit.object;o;o=o.parent){
+    if(o.userData.furnitureId){const h=this.s.inside(this.s.player),b=h&&furniture(h,this.s.player.floor).find(b=>b.id===o!.userData.furnitureId);if(b)return {x:b.x+b.w/2,y:b.y+b.d/2};}
+    if(o.userData.construction!==undefined){const b=this.s.survival.buildings.find(b=>b.id===o!.userData.construction);if(b)return {x:b.x,y:b.y};}
+   }
+  }
+  return exact?undefined:this.groundPoint(x,y);
+ }
+ interactable(x:number,y:number):PickupTarget|undefined{
+  const at=this.furniturePoint(x,y,true);if(at){const target=this.s.survival.targetAt(at.x,at.y);if(target)return target;}
+  const crate=this.pick(x,y);if(crate&&(crate.floor||0)===this.s.player.floor&&this.s.inside(crate)===this.s.inside(this.s.player))return {x:crate.x,y:crate.y,floor:crate.floor||0,label:crate.name,blocked:'This storage container cannot be picked up.'};
+  const door=this.pickDoor(x,y);if(door)return {x:door.x+door.w/2,y:door.y+door.d,floor:0,label:door.name+' · Door',blocked:'This door is attached to the building.'};
+  this.pointer(x,y);for(const hit of this.ray.intersectObjects([...this.cars.values()].map(c=>c.root),true))for(const [id,car] of this.cars){let o:T.Object3D|null=hit.object;while(o&&o!==car.root)o=o.parent;if(o){const v=this.s.vehicles.find(v=>v.id===id);if(v)return {x:v.x,y:v.y,floor:0,label:'Vehicle',blocked:'Vehicles cannot be picked up.'};}}
+  return undefined;
+ }
+ groundPoint(x:number,y:number){this.pointer(x,y);const at=new T.Vector3();return this.ray.ray.intersectPlane(new T.Plane(new T.Vector3(0,1,0),-this.elevation),at)?{x:at.x,y:at.z}:undefined;}
+ aim(x:number,y:number){if(this.s.weapon==='bat'&&(this.s.attackTime>0||this.s.shoveTime>0))return;this.pointer(x,y);const at=new T.Vector3();const plane=new T.Plane(new T.Vector3(0,1,0),-((this.s.weapon==='bat'?.2:1.25)+this.elevation));if(this.ray.ray.intersectPlane(plane,at))this.s.player.angle=Math.atan2(at.z-this.s.player.y,at.x-this.s.player.x);}
  pick(x:number,y:number){this.pointer(x,y);const hits=this.ray.intersectObjects([...this.crates.values()],true);for(const hit of hits){let o:T.Object3D|null=hit.object;while(o){if(o.userData.crate&&o.visible&&Math.hypot(o.userData.crate.x-this.s.player.x,o.userData.crate.y-this.s.player.y)<SIGHT_RADIUS)return o.userData.crate as LootCrate;o=o.parent;}}return undefined;}
  pickDoor(x:number,y:number){this.pointer(x,y);for(const hit of this.ray.intersectObjects([...this.houses.values()].map(v=>v.door),true)){let node:T.Object3D|null=hit.object;while(node){if(node.userData.house)return node.userData.house as House;node=node.parent;}}return undefined;}
  pickStairs(x:number,y:number){const h=this.s.inside(this.s.player),v=h&&this.houses.get(h);if(!v)return false;this.pointer(x,y);const stair=v.group.userData.stairs[this.s.player.floor];return !!stair&&this.ray.intersectObject(stair,true).length>0;}
@@ -51,13 +73,11 @@ export class World3D{
   const g=new T.Group(),ox=r.cx*CHUNK_SIZE,oy=r.cy*CHUNK_SIZE;
   box(g,[46,.08,46],[ox+23,-.06,oy+23],'#68745a');
   const patch=(x:number,y:number,w:number,h:number,color:string,level=.005)=>box(g,[w,.025,h],[x+w/2,level,y+h/2],color);
-  // Join roads edge-to-edge: overlapping coplanar asphalt flickers as the camera moves.
-  patch(ox,oy+20,46,6,'#616b6b');
-  patch(ox+7,oy,4,20,'#616b6b');patch(ox+7,oy+26,4,20,'#616b6b');
-  for(const y of [oy+19.6,oy+26]){patch(ox,y,7,.4,'#a1a396',.03);patch(ox+11,y,35,.4,'#a1a396',.03);}
-  for(let x=ox+1;x<ox+46;x+=4)if(x+1.9<=ox+7||x>=ox+11)patch(x,oy+22.95,1.9,.07,'#b8b49a',.025);
   let surfaceLayer=0;
-  for(const p of r.patches)patch(p.x,p.y,p.w,p.h,({road:'#616b6b',parking:'#707777',field:'#857f52',water:'#567c82',path:'#979685'})[p.kind],.045+surfaceLayer++*.003);
+  for(const p of r.patches){
+   patch(p.x,p.y,p.w,p.h,({road:'#616b6b',parking:'#707777',field:'#857f52',water:'#567c82',path:'#979685'})[p.kind],p.kind==='water'?.015:.045+surfaceLayer++*.0002);
+   if(p.kind==='road'&&p.w>p.h){for(let x=p.x+1;x<p.x+p.w-2;x+=5)patch(x,p.y+p.h/2,2,.08,'#b8b49a',.085);}
+  }
   for(const h of r.houses){
    const finish=finishes(h);
    const house=new T.Group();house.userData.solidOccluder=true;house.position.set(h.x,0,h.y);g.add(house);const floorSlab=box(house,[h.w,.1,h.d],[h.w/2,.05,h.d/2],'#a6a597');floorSlab.material=varietyMaterial('materials',finish.floor,Math.max(1,h.w/3),Math.max(1,h.d/3));
@@ -77,7 +97,7 @@ export class World3D{
     for(const x of [-.08,h.w+.08]){const geometry=new T.BufferGeometry();geometry.setAttribute('position',new T.Float32BufferAttribute([x,2.65,-.15,x,2.65+rise,h.d/2,x,2.65,h.d+.15],3));geometry.computeVertexNormals();const m=artMaterial('materials',8,2);m.side=T.DoubleSide;roof.add(new T.Mesh(geometry,m));(g.userData.ownedGeometry??=[]).push(geometry);}
    }
    const interiorStart=house.children.length;
-   for(const solid of furniture(h).filter(b=>!['fridge','post'].includes(b.kind)))furnish(house,h,solid);
+   for(const solid of furniture(h,0,true).filter(b=>!['fridge','post'].includes(b.kind))){const obj=furnish(house,h,solid);obj.userData.furnitureId=solid.id;obj.userData.furnitureFloor=0;}
    floorSlab.userData.interior=true;
    for(const obj of house.children.slice(interiorStart))obj.userData.interior=true;
    dressBuilding(h,house,roof);
@@ -88,7 +108,7 @@ export class World3D{
     let level: T.Object3D=house;
     if(floor>0){
      const room=new T.Group();room.position.y=floor*FLOOR_HEIGHT;room.visible=false;house.add(room);levels.push(room);level=room;
-     for(const o of ground)if(o!==floorSlab){const clone=o.clone(true);if(clone.userData.roomWall&&(clone instanceof T.Mesh))clone.material=varietyMaterial('materials',finish.inside,Math.max(1,Math.max(clone.scale.x,clone.scale.z)/3),1);room.add(clone);}
+     for(const o of ground)if(o!==floorSlab){const clone=o.clone(true);if(clone.userData.furnitureId)clone.userData.furnitureFloor=floor;if(clone.userData.roomWall&&(clone instanceof T.Mesh))clone.material=varietyMaterial('materials',finish.inside,Math.max(1,Math.max(clone.scale.x,clone.scale.z)/3),1);room.add(clone);}
      // Leave a real opening above the descending flight instead of covering it with a slab.
      const down=stairPoint(h,floor-1),x0=down.x-h.x-STAIR_WIDTH/2-.06,x1=down.x-h.x+STAIR_WIDTH/2+.06;
      const z0=down.y-h.y-STAIR_LENGTH-.06,z1=down.y-h.y+.12;
@@ -124,7 +144,7 @@ export class World3D{
   for(const r of this.s.world.active)if(!this.regions.has(r.key))this.buildRegion(r);
   const vehicles=new Map(this.s.vehicles.map(v=>[v.id,v]));if(this.s.driving)vehicles.set(this.s.vehicle.id,this.s.vehicle);
   for(const [id,m]of this.cars)if(!vehicles.has(id)){this.scene.remove(m.root);this.cars.delete(id);}
-  for(const v of vehicles.values())if(!this.cars.has(v.id)){const m=new CarModel(({green:'#718576',red:'#926859',blue:'#657e89'})[v.color],v.kind||'wagon');this.cars.set(v.id,m);this.scene.add(m.root);}
+  for(const v of vehicles.values())if(!this.cars.has(v.id)){const m=new CarModel(v.kind==='sports'?'#bd3040':({green:'#718576',red:'#926859',blue:'#657e89'})[v.color],v.kind||'wagon');this.cars.set(v.id,m);this.scene.add(m.root);}
   const alive=new Set(this.s.zombies.filter(z=>(z.hp>0||z.diedAt!==undefined&&this.s.elapsed-z.diedAt<25)&&Math.hypot(z.x-this.s.player.x,z.y-this.s.player.y)<SIGHT_RADIUS));
   for(const [z,m]of this.zombies)if(!alive.has(z)){this.scene.remove(m.root);this.zombies.delete(z);}
   for(const z of alive)if(!this.zombies.has(z)){const m=new ActorModel(true,Math.floor(z.phase/6.28*8));this.zombies.set(z,m);this.scene.add(m.root);}
@@ -132,23 +152,35 @@ export class World3D{
   for(const [z,g]of this.blood){if(this.s.elapsed-(z.diedAt||0)>90||!this.s.zombies.includes(z)){this.scene.remove(g);this.blood.delete(z);}}
   const structures=this.s.survival.buildings;
   for(const [id,mesh]of this.constructions)if(!structures.some(b=>b.id===id)){this.scene.remove(mesh);this.constructions.delete(id);}
-  for(const b of structures){let mesh=this.constructions.get(b.id);if(!mesh){mesh=new T.Group();mesh.position.set(b.x,b.floor*FLOOR_HEIGHT,b.y);this.scene.add(mesh);this.constructions.set(b.id,mesh);
-   if(b.kind==='wall'){for(let y=.25;y<1.9;y+=.3)box(mesh,[1.0,.24,.16],[0,y,0],'#837e65');for(const x of [-.4,.4])box(mesh,[.12,1.8,.2],[x,.9,0],'#687b78');}
+  for(const b of structures){let mesh=this.constructions.get(b.id);if(!mesh){mesh=new T.Group();mesh.position.set(b.x,b.floor*FLOOR_HEIGHT,b.y);this.scene.add(mesh);this.constructions.set(b.id,mesh);mesh.userData.construction=b.id;
+   if(b.kind==='wall'){for(let y=.15;y<2.5;y+=.3)box(mesh,[2,.30,.16],[0,y,0],'#837e65');for(const x of [-.92,.92])box(mesh,[.12,2.5,.2],[x,1.25,0],'#687b78');}
+   else if(b.kind==='floor'){box(mesh,[1.99,.09,1.99],[0,.06,0],'#837e65');}
+   else if(b.kind==='roof'){box(mesh,[1.99,.16,1.99],[0,2.65,0],'#555851');}
+   else if(b.kind==='door'){
+    for(const x of [-.94,.94])box(mesh,[.12,2.5,.2],[x,1.25,0],'#687b78');box(mesh,[2,.2,.2],[0,2.4,0],'#687b78');
+    const hinge=new T.Group();hinge.position.x=-.86;mesh.add(hinge);box(hinge,[1.72,2.25,.12],[.86,1.15,0],'#837e65');box(hinge,[.06,.08,.10],[1.52,1.12,.10],'#b9beb3');mesh.userData.hinge=hinge;
+   }
+   else if(b.kind==='furniture'&&b.furnishing){const f=b.furnishing;furnish(mesh,{x:0,y:0,design:f.design} as House,{x:-f.w/2,y:-f.d/2,w:f.w,d:f.d,height:f.height,kind:f.kind});}
    else if(b.kind==='bench'){box(mesh,[1,.12,1],[0,.85,0],'#837e65');for(const x of [-.4,.4])for(const z of [-.4,.4])box(mesh,[.12,.8,.12],[x,.4,z],'#687b78');}
    else if(b.kind==='bed'){box(mesh,[.9,.16,1],[0,.15,0],'#687b78');box(mesh,[.7,.12,.25],[0,.28,-.35],'#b9beb3');}
    else if(b.kind==='fire'){for(const x of [-.3,.3])box(mesh,[.2,.15,.7],[x,.12,0],'#555851');box(mesh,[.4,.25,.4],[0,.2,0],'#9c6334');}
    else if(b.kind==='barrel'){box(mesh,[.8,.8,.8],[0,.4,0],'#657e89');box(mesh,[.7,.04,.7],[0,.81,0],'#536870');}
    else{box(mesh,[.5,.45,.5],[0,.23,0],'#687b78');box(mesh,[.05,.7,.05],[.18,.65,0],'#b9beb3');}
-  }mesh.visible=b.floor===this.s.player.floor&&Math.hypot(b.x-this.s.player.x,b.y-this.s.player.y)<SIGHT_RADIUS&&(!this.s.inside(b)||this.s.inside(b)===this.s.inside(this.s.player));}
+  }mesh.rotation.y=-(b.rotation||0)*Math.PI/2;if(mesh.userData.hinge)mesh.userData.hinge.rotation.y=b.open?-Math.PI/2:0;mesh.visible=(b.kind!=='roof'||Math.hypot(b.x-this.s.player.x,b.y-this.s.player.y)>4)&&b.floor===this.s.player.floor&&Math.hypot(b.x-this.s.player.x,b.y-this.s.player.y)<SIGHT_RADIUS&&(!this.s.inside(b)||this.s.inside(b)===this.s.inside(this.s.player));}
   this.darkness.apply(this.scene);
  }
  render(dt:number,steer=0){
-  if(this.lost)return;this.sync();const s=this.s,p=s.player;this.darkness.center.value.set(p.x,p.y);
-  this.buildMarker.visible=s.buildPreview;const placement=s.survival.placement();this.buildMarker.position.set(placement.x,placement.floor*FLOOR_HEIGHT+.13,placement.y);this.player.root.visible=!s.driving;this.elevation=s.playerElevation;this.player.root.position.set(p.x,this.elevation,p.y);this.player.root.rotation.y=Math.PI/2-p.angle;
-  this.player.pose({phase:p.gait,moving:p.moving,run:p.running,sneak:p.sneaking,aim:p.aiming,rifle:s.weapon==='rifle',gun:s.gun,attacking:s.attackTime>0,attack:s.attackTime>0?1-s.attackTime/ATTACK_DURATION:0,hurt:s.damageTime,recoil:s.shotTime/.12,time:s.elapsed});
-  this.batTrail.update(this.player.bat,s.elapsed,s.attackTime>0?1-s.attackTime/ATTACK_DURATION:undefined,!s.driving&&!s.dead&&s.weapon==='bat');
+  if(this.lost)return;for(const o of this.exteriorHidden)o.visible=true;this.exteriorHidden.clear();this.sync();const s=this.s,p=s.player;this.darkness.center.value.set(p.x,p.y);
+  this.buildMarker.visible=!s.paused&&s.survival.placing;const placement=s.survival.placement();this.buildMarker.position.set(placement.x,placement.floor*FLOOR_HEIGHT+.13,placement.y);const draft=s.survival.draft(s.survival.carried?'furniture':RECIPES[s.survival.selected]?.build||'floor'),footprint=s.survival.solid(draft);this.buildMarker.scale.set(footprint.w,footprint.d,1);(this.buildMarker.material as T.MeshBasicMaterial).color.set((s.survival.carried?s.survival.placementReason(draft.kind):s.survival.reason(s.survival.selected,true))?'#c45e53':'#9bc97a');this.player.root.visible=!s.driving;this.elevation=s.playerElevation;this.player.root.position.set(p.x,this.elevation,p.y);this.player.root.rotation.y=Math.PI/2-p.angle;
+  this.player.pose({phase:p.gait,moving:p.moving,run:p.running,sneak:p.sneaking,aim:p.aiming,rifle:s.weapon==='rifle',gun:s.gun,shove:s.shoveTime,groundAttack:s.groundAttack,attacking:s.attackTime>0,attack:s.attackTime>0?1-s.attackTime/s.attackDuration:0,hurt:s.damageTime,recoil:s.shotTime/.12,time:s.elapsed});
+  this.batTrail.update(this.player.bat,s.elapsed,s.attackTime>0?(s.groundAttack?.18+(1-s.attackTime/s.attackDuration-.43)/.29*.61:1-s.attackTime/s.attackDuration):undefined,!s.driving&&!s.dead&&s.weapon==='bat');
   for(const [z,m]of this.zombies){const zombieHouse=s.inside(z);m.root.visible=(z.floor||0)===p.floor&&(!zombieHouse||s.inside(p)===zombieHouse);m.root.position.set(z.x,(z.floor||0)*FLOOR_HEIGHT,z.y);m.root.rotation.y=Math.PI/2-(z.hp<=0?(z.deathAngle||0):(z.angle||0));
-   if(z.hp<=0){const age=Math.max(0,s.elapsed-(z.diedAt??s.elapsed)),fall=Math.min(1,age/(z.deathCause==='vehicle'?.28:.65)),ease=fall*fall*(3-2*fall);m.body.rotation.x=Math.PI/2*ease;m.body.position.y=.17*ease;m.arms.forEach((a,i)=>{a.rotation.z=(i?1:-1)*.5*ease;});m.legs.forEach((l,i)=>{l.rotation.x=(i?.12:-.18)*ease;});m.root.scale.setScalar(age>22?Math.max(0,(25-age)/3):1);}
+   if(z.hp<=0){const age=Math.max(0,s.elapsed-(z.diedAt??s.elapsed)),fall=(z.downUntil||0)>(z.diedAt||0)?1:Math.min(1,age/(z.deathCause==='vehicle'?.28:.65)),ease=fall*fall*(3-2*fall);m.body.rotation.x=((z.downUntil||0)>(z.diedAt||0)?-1:1)*Math.PI/2*ease;m.body.position.y=.17*ease;m.arms.forEach((a,i)=>{a.rotation.z=(i?1:-1)*.5*ease;});m.legs.forEach((l,i)=>{l.rotation.x=(i?.12:-.18)*ease;});m.root.scale.setScalar(age>22?Math.max(0,(25-age)/3):1);}
+   else if((z.downUntil||0)>s.elapsed){
+    const age=s.elapsed-(z.downAt||0),remaining=(z.downUntil||0)-s.elapsed,fall=Math.min(1,age/.4),rise=Math.min(1,remaining/.85),blend=fall*rise;
+    m.pose({phase:0,moving:false,time:s.elapsed});m.body.rotation.x=-Math.PI/2*blend;m.body.position.y=.16*blend;
+    m.legs.forEach((leg,i)=>leg.rotation.x=(i?.18:-.12)*blend);m.knees.forEach(k=>k.rotation.x=.25*blend);
+   }
    else{m.body.rotation.x=0;m.pose({phase:z.gait||0,moving:!!z.moving,attack:z.cooldown>1?(z.cooldown-1)/.4:0,hurt:z.hit,time:s.elapsed});}
   }
   const vehicles=new Map(s.vehicles.map(v=>[v.id,v]));if(s.driving)vehicles.set(s.vehicle.id,s.vehicle);
@@ -161,8 +193,20 @@ export class World3D{
   for(const [z,blood] of this.blood){const bloodHouse=s.inside(z);blood.visible=(z.floor||0)===p.floor&&(!bloodHouse||s.inside(p)===bloodHouse);}this.ring.visible=!s.driving;this.ring.position.set(p.x,this.elevation+.115,p.y);
   this.trace.visible=this.flash.visible=s.shotTime>0&&!!s.shotEnd;
   if(s.shotEnd&&s.shotTime>0){const start=new T.Vector3(p.x+Math.cos(p.angle)*.65,1.25+this.elevation,p.y+Math.sin(p.angle)*.65);const attr=this.trace.geometry.getAttribute('position');attr.setXYZ(0,start.x,start.y,start.z);attr.setXYZ(1,s.shotEnd.x,1.25+this.elevation,s.shotEnd.y);attr.needsUpdate=true;this.trace.geometry.computeBoundingSphere();this.flash.position.copy(start);}
+  // Indoor cutaway: omit all exterior geometry, rather than dimming it behind the room.
+  const shelter=s.inside(p);
+  if(shelter){
+   const hide=(o:T.Object3D)=>{if(o.visible){o.visible=false;this.exteriorHidden.add(o);}};
+   const room=this.houses.get(shelter)?.group;
+   for(const region of this.regions.values())for(const child of region.children){const crate=child.userData.crate as LootCrate|undefined;if(child!==room&&(!crate||s.inside(crate)!==shelter))hide(child);}
+   for(const car of this.cars.values())hide(car.root);
+   for(const [z,m] of this.zombies)if(s.inside(z)!==shelter)hide(m.root);
+   for(const [z,blood] of this.blood)if(s.inside(z)!==shelter)hide(blood);
+   for(const [id,mesh] of this.constructions){const b=s.survival.buildings.find(b=>b.id===id);if(!b||s.inside(b)!==shelter)hide(mesh);}
+   if(s.shotEnd&&s.inside(s.shotEnd)!==shelter)hide(this.trace);
+  }
   const destination=new T.Vector3(p.x,.7+this.elevation,p.y);if(!this.ready){this.target.copy(destination);this.ready=true;}else this.target.lerp(destination,1-Math.exp(-dt*12));
-  this.camera.position.copy(this.target).add(new T.Vector3(40,32.66,40));this.camera.lookAt(this.target);this.camera.updateMatrixWorld();const focus=new T.Vector3(p.x,this.elevation+1,p.y),viewFocus=focus.clone().applyMatrix4(this.camera.matrixWorldInverse),pixel=focus.clone().project(this.camera),size=this.renderer.getDrawingBufferSize(new T.Vector2());this.darkness.focus.value.set((pixel.x+1)*size.x/2,(pixel.y+1)*size.y/2);this.darkness.focusDepth.value=-viewFocus.z;this.darkness.fadeRadius.value=65*this.zoom;this.scene.updateMatrixWorld(true);if(s.driving)this.darkness.occluded.value=0;else this.darkness.updateOcclusion(this.camera,focus,[...this.regions.values(),...this.cars.values()].map(o=>o instanceof CarModel?o.root:o),this.elevation);this.renderer.render(this.scene,this.camera);
+  this.camera.position.copy(this.target).add(new T.Vector3(40,32.66,40));this.camera.lookAt(this.target);this.camera.updateMatrixWorld();const focus=new T.Vector3(p.x,this.elevation+1,p.y),viewFocus=focus.clone().applyMatrix4(this.camera.matrixWorldInverse),pixel=focus.clone().project(this.camera),size=this.renderer.getDrawingBufferSize(new T.Vector2());this.darkness.focus.value.set((pixel.x+1)*size.x/2,(pixel.y+1)*size.y/2);this.darkness.focusDepth.value=-viewFocus.z;this.darkness.fadeRadius.value=65*this.zoom;this.scene.updateMatrixWorld(true);if(s.driving)this.darkness.occluded.value=0;else this.darkness.updateOcclusion(this.camera,focus,[...this.regions.values(),...this.cars.values()].map(o=>o instanceof CarModel?o.root:o),this.elevation);for(const [h,v] of this.houses)v.group.traverse(o=>{if(o.userData.furnitureId)o.visible=o.userData.furnitureFloor===p.floor&&s.inside(p)===h&&!h.removedFurniture?.[o.userData.furnitureFloor+':'+o.userData.furnitureId];});this.renderer.render(this.scene,this.camera);
   if(!s.driving){
    for(const {source,overlay} of this.playerRevealMeshes){let visible=true;for(let o:T.Object3D|null=source;o;o=o.parent)if(!o.visible){visible=false;break;}overlay.visible=visible;overlay.matrix.copy(source.matrixWorld);}
    const autoClear=this.renderer.autoClear,background=this.scene.background;
@@ -170,7 +214,7 @@ export class World3D{
    // The depth buffer currently contains scenery only. Draw hidden fragments first,
    // then the normally lit player, without clearing that scenery depth.
    this.renderer.render(this.playerRevealScene,this.camera);
-   this.scene.background=null;this.camera.layers.set(1);this.renderer.render(this.scene,this.camera);
+   this.scene.background=null;this.camera.layers.set(1);for(const [h,v] of this.houses)v.group.traverse(o=>{if(o.userData.furnitureId)o.visible=o.userData.furnitureFloor===p.floor&&s.inside(p)===h&&!h.removedFurniture?.[o.userData.furnitureFloor+':'+o.userData.furnitureId];});this.renderer.render(this.scene,this.camera);
    this.camera.layers.set(0);this.scene.background=background;this.renderer.autoClear=autoClear;
   }
  }

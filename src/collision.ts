@@ -1,8 +1,8 @@
 import {STAIR_CLEARANCE} from './stairs.js';
 import type {Region,VehicleState} from './world.js';
 import type {House} from './sim.js';
-export type Solid={x:number;y:number;w:number;d:number;height:number;kind:string};
-export function furniture(h:House):Solid[]{
+export type Solid={id?:string;x:number;y:number;w:number;d:number;height:number;kind:string};
+export function furniture(h:House,floor=0,includeRemoved=false):Solid[]{
  const at=(x:number,y:number,w:number,d:number,height:number,kind:string):Solid=>({x:h.x+x,y:h.y+y,w,d,height,kind});
  const home=['cottage','ranch','colonial','townhouse','apartments','motel'].includes(h.kind||'cottage'),design=h.design||0;
  const base:Solid[]=[at(.15,1.30,.70,.70,1.91,'fridge')];
@@ -16,10 +16,12 @@ export function furniture(h:House):Solid[]{
  if(h.kind==='church'){for(let y=2.5;y<h.d-1.5;y+=1.5)for(const x of [.8,h.w/2+.65])base.push(at(x,y,h.w/2-1.5,.5,.85,'pew'));}
  if(h.kind==='gas')for(const x of [.235,h.w-.365])base.push(at(x,h.d+2.435,.13,.13,2.5,'post'));
  if(h.kind==='library'||h.kind==='police')for(const x of [h.w/2-1.265,h.w/2+1.035])base.push(at(x,h.d+.235,.23,.23,2.3,'post'));
- return (h.floors||1)>1?base.filter(b=>!(b.x+b.w>h.x+h.w-STAIR_CLEARANCE&&b.y+b.d>h.y+h.d-3.2)):base;
+ const layout=(h.floors||1)>1?base.filter(b=>!(b.x+b.w>h.x+h.w-STAIR_CLEARANCE&&b.y+b.d>h.y+h.d-3.2)):base;
+ return layout.map(b=>({...b,id:b.kind+':'+b.x+':'+b.y})).filter(b=>includeRemoved||!h.removedFurniture?.[floor+':'+b.id]);
 }
 export function regionSolids(r:Region):Solid[]{return [
- ...r.houses.flatMap(furniture),
+ ...r.houses.flatMap(h=>furniture(h)),
+ ...r.patches.filter(p=>p.kind==='water').map(p=>({x:p.x,y:p.y,w:p.w,d:p.h,height:.05,kind:'water'})),
  ...r.trees.map(t=>({x:t.x-.22,y:t.y-.22,w:.44,d:.44,height:3.5,kind:'tree'})),
  ...r.crates.filter(c=>!c.fridge&&!(c.floor||0)).map(c=>({x:c.x-.375,y:c.y-.325,w:.75,d:.65,height:.69,kind:'crate'})),
  ...r.props.map(p=>{const w=p.kind==='bench'?1.8:p.kind==='grave'?.55:p.kind==='sign'?.3:.65,d=p.kind==='bench'?.6:p.kind==='grave'?.18:p.kind==='sign'?.3:.65;return {x:p.x-w/2,y:p.y-d/2,w,d,height:p.kind==='sign'?1.8:.85,kind:p.kind};})];}
