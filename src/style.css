@@ -70,3 +70,12 @@
 .minimap-wrap{right:14px;bottom:14px;width:198px;padding:0}.mini-title{padding:8px 9px;background:var(--hud-header);border-bottom:1px solid var(--hud-border);font:8px 'DM Sans',sans-serif;letter-spacing:.5px;white-space:nowrap;overflow:hidden}.mini-title span:first-child{overflow:hidden;text-overflow:ellipsis}.mini-footer{font-size:7px;padding:6px 8px;border-top:1px solid #414d36}.coordinates{font:8px monospace;padding:4px 8px;color:var(--hud-muted)}#minimap{display:block;width:196px;height:125px}
 @media(max-width:1000px){.vitals{width:185px}.bottom-center{max-width:calc(100vw - 415px)}.minimap-wrap{width:178px}#minimap{width:176px;height:112px}.hotbar button{height:66px}.hotbar button span{font-size:7px}.weapon-hint{font-size:8px}}
 @media(max-width:760px){.toolbar{left:8px;top:8px}.toolbar button{width:32px;height:34px}.clock{right:8px;top:8px;min-width:110px;padding:6px 8px}.clock .time{font-size:20px}.clock .weather span{display:none}.vitals{left:8px;bottom:105px;width:160px}.minimap-wrap{display:none}.bottom-center{bottom:8px;width:calc(100vw - 16px);max-width:480px}.hotbar button{height:64px}.mobile-controls{right:8px;bottom:110px}.weapon-hint{font-size:8px}.interaction,.toast{font-size:10px}}
+
+/* A compact pause menu, with the same olive surfaces as the HUD. */
+.modal.pause-modal{background:#080d0866;backdrop-filter:blur(2px)}
+.panel.pause-panel{width:min(300px,calc(100vw - 32px));padding:22px;background:var(--hud-surface);border:1px solid var(--hud-border);box-shadow:0 12px 40px #0005}
+.pause-panel h2{margin:0 0 20px;font:500 18px 'DM Sans',sans-serif;color:var(--hud-text);letter-spacing:.2px}
+.pause-panel button{display:flex;align-items:center;justify-content:space-between;width:100%;padding:12px;font-size:12px;text-align:left;border:1px solid var(--hud-border)}
+.pause-resume{background:#39482d;color:var(--hud-text)}.pause-resume:hover{background:#465638}.pause-resume kbd{font:9px 'DM Sans',sans-serif;color:#b5c2a5;border:1px solid #6b7d59;padding:2px 5px}
+.pause-panel .pause-restart{margin-top:8px;background:transparent;color:var(--hud-muted);border-color:transparent}.pause-panel .pause-restart:hover{background:#293223;color:var(--hud-text)}
+.pause-panel button:focus-visible{outline:1px solid #adc087;outline-offset:2px}
