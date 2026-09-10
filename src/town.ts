@@ -1,6 +1,13 @@
+import {layoutFor} from './building-layout';
+import {townPlan} from './county-plan';
 import type {House} from './sim.js';
-export type BuildingKind='cottage'|'ranch'|'colonial'|'townhouse'|'apartments'|'police'|'library'|'gas'|'clinic'|'school'|'diner'|'church'|'grocery'|'warehouse'|'barn'|'hardware'|'garage'|'pharmacy'|'gunshop'|'motel'|'firestation'|'bank'|'laundromat'|'pub'|'postoffice'|'bakery'|'townhall'|'lodge';
+export type BuildingKind='supermarket'|'hospital'|'prison'|'barracks'|'armory'|'cottage'|'ranch'|'colonial'|'townhouse'|'apartments'|'police'|'library'|'gas'|'clinic'|'school'|'diner'|'church'|'grocery'|'warehouse'|'barn'|'hardware'|'garage'|'pharmacy'|'gunshop'|'motel'|'firestation'|'bank'|'laundromat'|'pub'|'postoffice'|'bakery'|'townhall'|'lodge';
 export const BUILDINGS:Record<BuildingKind,{label:string;w:number;d:number;floors:number;style:House['style'];wall:number;roof:'gable'|'flat'|'hip'}>={
+ supermarket:{label:'FRESHWAY SUPERMARKET',w:29,d:15,floors:1,style:'shop',wall:0,roof:'flat'},
+ hospital:{label:'COUNTY GENERAL HOSPITAL',w:29,d:29,floors:2,style:'shop',wall:1,roof:'flat'},
+ prison:{label:'ASH COUNTY CORRECTIONS',w:29,d:30,floors:2,style:'shop',wall:3,roof:'flat'},
+ barracks:{label:'FORT ALDER · BARRACKS',w:17,d:17,floors:1,style:'warehouse',wall:2,roof:'flat'},
+ armory:{label:'FORT ALDER · SUPPLY',w:12,d:10,floors:1,style:'warehouse',wall:2,roof:'flat'},
  firestation:{label:'WREN FIRE & RESCUE',w:12,d:9,floors:2,style:'shop',wall:0,roof:'flat'},
  bank:{label:'COUNTY SAVINGS BANK',w:10,d:8,floors:2,style:'shop',wall:1,roof:'flat'},
  laundromat:{label:'SPIN CYCLE LAUNDRY',w:9,d:6,floors:1,style:'shop',wall:2,roof:'flat'},
@@ -32,23 +39,29 @@ export const BUILDINGS:Record<BuildingKind,{label:string;w:number;d:number;floor
 };
 export function townBuildings(district:string,cx:number,cy:number,random:()=>number,starter:House[]):House[]{
  const ox=cx*46,oy=cy*46,result:House[]=[];
- const add=(kind:BuildingKind,x:number,y:number)=>{const def=BUILDINGS[kind],colors=['#a7aba0','#8f9c92','#b5ac93','#a89888'];result.push({x:ox+x,y:oy+y,w:def.w,d:def.d,kind,floors:def.floors,design:Math.floor(random()*4),style:def.style,color:colors[Math.floor(random()*colors.length)],roof:random()<.5?'#555851':'#60544c',name:def.label,door:false,searched:false,loot:kind==='police'?['Bandage','Plank']:kind==='clinic'?['Bandage','Bandage','Water']:['Beans','Water','Plank']});};
+ const add=(kind:BuildingKind,x:number,y:number)=>{const def=BUILDINGS[kind],colors=['#a7aba0','#8f9c92','#b5ac93','#a89888'];result.push({x:ox+x,y:oy+y,w:def.w,d:def.d,kind,layout:layoutFor(kind,def.w,def.d),floors:def.floors,design:Math.floor(random()*4),style:def.style,color:colors[Math.floor(random()*colors.length)],roof:random()<.5?'#555851':'#60544c',name:def.label,door:false,searched:false,loot:kind==='police'?['Bandage','Plank']:kind==='clinic'?['Bandage','Bandage','Water']:['Beans','Water','Plank']});};
  if(cx===0&&cy===0){result.push(...starter.map((h,i)=>({...h,loot:[...h.loot],kind:(['cottage','colonial','ranch','townhouse','colonial','cottage','ranch','townhouse'] as BuildingKind[])[i%8],floors:i%3===1?2:1,design:i%4})));return result;}
- // Civic destinations sit at Wren's edge, away from the starting residential yards.
- if(cx===2&&cy===0){add('library',15,5);add('police',31,32);return result;}
- if(cx===0&&cy===2){add('gas',15,7);add('pharmacy',31,33);return result;}
- if(Math.abs(cx)<=2&&Math.abs(cy)<=2&&(district==='Garden suburb'||district==='Wren residential')){
-  const kinds:BuildingKind[]=['cottage','ranch','colonial','townhouse'];
-  for(const [x,y] of [[14,7],[32,8],[14,32],[32,33]])add(kinds[Math.floor(random()*kinds.length)],x,y);
-  return result;
- }
- // Rural chunks are usually empty. Occasional farms/cabins break up long drives.
+ const plan=townPlan(cx,cy),name=plan.settlement?.name||'County';
+ if(district==='Medical campus'){add('hospital',14,3);result[0].name=plan.landmark?.name||name+' General Hospital';return result;}
+ if(district==='Correctional complex'){add('prison',14,2);result[0].name=plan.landmark?.name||name+' Corrections';return result;}
+ if(district==='Military base'){add('barracks',14,2);add('armory',32,3);add('garage',14,29);add('clinic',33,30);return result;}
+ if(district==='Memorial park'){if(random()<.4)add('bakery',32,31);return result;}
  if(district==='Woodland reserve'){if(random()<.045)add(random()<.5?'lodge':'cottage',15+random()*7,5+random()*4);return result;}
  if(district==='Farm country'){if(random()<.22){add('ranch',15,5);if(random()<.65)add('barn',30,30);}return result;}
- const residential=district==='Garden suburb'||district==='Wren residential';
- if(residential){const kinds:BuildingKind[]=['cottage','ranch','colonial','townhouse'];for(const [x,y] of [[1,3],[1,31],[14,4],[25,4],[36,4],[14,30],[25,30],[36,30]]){let k=kinds[Math.floor(random()*4)];if(x===1&&BUILDINGS[k].w>5)k='cottage';add(k,x,y);}return result;}
- const kinds:BuildingKind[]=district==='Market district'?(random()<.55?['pharmacy','gunshop','motel','hardware']:['grocery','diner','apartments','gas']):district==='Industrial yard'?(random()<.65?['garage','hardware','warehouse','gas']:['warehouse','gas','warehouse','clinic']):district==='Farm country'?['barn','ranch']:district==='Woodland reserve'?['cottage','church']:district==='Memorial park'?['library','church','police']:['police','school','library',random()<.5?'clinic':'pharmacy'];
- const extra:BuildingKind[]=district==='Market district'?['laundromat','pub','bakery','bank','postoffice','motel','grocery','diner']:district==='Industrial yard'?['firestation','postoffice','garage','warehouse']:['townhall','firestation','bank','library','school','clinic'];
- for(let i=0;i<kinds.length;i++)if(random()<.7)kinds[i]=extra.splice(Math.floor(random()*extra.length),1)[0]||kinds[i];
- const slots=[[14,3],[30,3],[14,29],[30,29]];kinds.forEach((kind,i)=>add(kind,slots[i][0],slots[i][1]));return result;
+ if(district==='Garden suburb'||district==='Wren residential'){
+  const kinds:BuildingKind[]=['cottage','ranch','colonial','townhouse'];
+  for(const [x,y] of [[14,5],[33,6],[14,30],[33,31]])if(random()<.86)add(kinds[Math.floor(random()*kinds.length)],x,y);
+  return result;
+ }
+ if(district==='Market district'){
+  // A recognisable retail anchor on the main road, with small shops opposite.
+  if(cx===(plan.settlement?.cx||0)+1){add('supermarket',14,28);add(random()<.5?'bakery':'diner',14,6);add(random()<.5?'pharmacy':'laundromat',33,6);}
+  else{add(random()<.5?'bank':'postoffice',14,3);add(random()<.5?'bakery':'pub',33,4);add(random()<.5?'motel':'apartments',14,29);add(random()<.5?'grocery':'gunshop',33,30);}
+ }else if(district==='Civic center'){
+  add(random()<.55?'townhall':'school',14,3);add('library',32,4);add('police',14,29);add(random()<.5?'church':'firestation',32,29);
+ }else{
+  add('warehouse',14,3);add('garage',31,4);add('hardware',14,29);add('gas',33,30);
+ }
+ for(const h of result)if(h.style==='shop'&&h.kind!=='supermarket')h.name=h.name.replace(/WREN|ASH COUNTY|COUNTY/g,name.toUpperCase());
+ return result;
 }

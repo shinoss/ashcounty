@@ -1,8 +1,11 @@
+import {perimeter} from './building-layout';
+import {institutionFurniture} from './institution-furniture';
 import {STAIR_CLEARANCE} from './stairs.js';
 import type {Region,VehicleState} from './world.js';
 import type {House} from './sim.js';
 export type Solid={id?:string;x:number;y:number;w:number;d:number;height:number;kind:string};
 export function furniture(h:House,floor=0,includeRemoved=false):Solid[]{
+ if(h.layout)return institutionFurniture(h).filter(b=>!((h.floors||1)>1&&b.x+b.w>h.x+h.w-STAIR_CLEARANCE&&b.y+b.d>h.y+h.d-3.2)).map(b=>({...b,id:b.kind+':'+b.x+':'+b.y})).filter(b=>includeRemoved||!h.removedFurniture?.[floor+':'+b.id]);
  const at=(x:number,y:number,w:number,d:number,height:number,kind:string):Solid=>({x:h.x+x,y:h.y+y,w,d,height,kind});
  const home=['cottage','ranch','colonial','townhouse','apartments','motel','lodge'].includes(h.kind||'cottage'),design=h.design||0;
  const base:Solid[]=[at(.15,1.30,.70,.70,1.91,'fridge')];
@@ -24,12 +27,23 @@ export function furniture(h:House,floor=0,includeRemoved=false):Solid[]{
  return layout.map(b=>({...b,id:b.kind+':'+b.x+':'+b.y})).filter(b=>includeRemoved||!h.removedFurniture?.[floor+':'+b.id]);
 }
 export function regionSolids(r:Region):Solid[]{return [
+ ...(r.barriers||[]),
+ ...(r.foliage||[]).filter(f=>f.kind===1).map(f=>({x:f.x-.4*f.size,y:f.y-.26*f.size,w:.8*f.size,d:.52*f.size,height:.7*f.size,kind:'hedge'})),
  ...r.houses.flatMap(h=>furniture(h)),
  ...r.patches.filter(p=>p.kind==='water').map(p=>({x:p.x,y:p.y,w:p.w,d:p.h,height:.05,kind:'water'})),
  ...r.trees.map(t=>({x:t.x-.22,y:t.y-.22,w:.44,d:.44,height:3.5,kind:'tree'})),
  ...r.crates.filter(c=>!c.fridge&&!c.furnitureId&&!(c.floor||0)).map(c=>({x:c.x-.375,y:c.y-.325,w:.75,d:.65,height:.69,kind:'crate'})),
- ...r.props.map(p=>{const w=p.kind==='bench'?1.8:p.kind==='grave'?.55:p.kind==='sign'||p.kind==='lamp'?.3:.65,d=p.kind==='bench'?.6:p.kind==='grave'?.18:p.kind==='sign'||p.kind==='lamp'?.3:.65;return {x:p.x-w/2,y:p.y-d/2,w,d,height:p.kind==='lamp'?4:p.kind==='sign'?1.8:.85,kind:p.kind};})];}
-export function walls(h:House):Solid[]{const s=(x:number,y:number,w:number,d:number):Solid=>({x,y,w,d,height:2.7,kind:'wall'});const result=[s(h.x-.075,h.y-.075,h.w+.15,.15),s(h.x-.075,h.y,.15,h.d),s(h.x+h.w-.075,h.y,.15,h.d)];if(h.door){result.push(s(h.x,h.y+h.d-.075,h.w/2-.4,.15),s(h.x+h.w/2+.4,h.y+h.d-.075,h.w/2-.4,.15));}else result.push(s(h.x,h.y+h.d-.075,h.w,.15));return result;}
+ ...r.props.map(p=>{const w=p.kind==='fountain'?3.5:p.kind==='bench'?1.8:p.kind==='grave'?.55:p.kind==='sign'||p.kind==='lamp'?.3:.65,d=p.kind==='fountain'?3.5:p.kind==='bench'?.6:p.kind==='grave'?.18:p.kind==='sign'||p.kind==='lamp'?.3:.65;return {x:p.x-w/2,y:p.y-d/2,w,d,height:p.kind==='lamp'?4:p.kind==='sign'?1.8:.85,kind:p.kind};})];}
+export function walls(h:House):Solid[]{if(h.layout){const out:Solid[]=[],add=(x:number,y:number,w:number,d:number)=>out.push({x:h.x+x,y:h.y+y,w,d,height:2.7,kind:'wall'});
+ for(const edge of perimeter(h)){
+  const portal=h.layout.openings?.find(o=>edge.horizontal&&o.y===edge.y&&o.x>=edge.x&&o.x<=edge.x+edge.length);
+  if(edge.horizontal&&(portal||edge.y===h.d&&h.door&&edge.x<=h.w/2&&edge.x+edge.length>=h.w/2)){
+   const center=portal?.x??h.w/2,half=(portal?.width??1.2)/2,lo=center-half,hi=center+half;if(lo>edge.x)add(edge.x,edge.y-.075,lo-edge.x,.15);if(hi<edge.x+edge.length)add(hi,edge.y-.075,edge.x+edge.length-hi,.15);
+  }else add(edge.x-.075,edge.y-.075,edge.horizontal?edge.length+.15:.15,edge.horizontal?.15:edge.length+.15);
+ }
+ for(const b of h.layout.partitions)add(b.x,b.y,b.w,b.d);
+ return out;
+ }const s=(x:number,y:number,w:number,d:number):Solid=>({x,y,w,d,height:2.7,kind:'wall'});const result=[s(h.x-.075,h.y,.15,h.d),s(h.x+h.w-.075,h.y,.15,h.d)];if(h.windowBroken)result.push(s(h.x-.075,h.y-.075,h.w/2-.425,.15),s(h.x+h.w/2+.5,h.y-.075,h.w/2-.425,.15));else result.push(s(h.x-.075,h.y-.075,h.w+.15,.15));if(h.door){result.push(s(h.x,h.y+h.d-.075,h.w/2-.4,.15),s(h.x+h.w/2+.4,h.y+h.d-.075,h.w/2-.4,.15));}else result.push(s(h.x,h.y+h.d-.075,h.w,.15));return result;}
 export function pointIn(s:Solid,x:number,y:number,r=0){return x>s.x-r&&x<s.x+s.w+r&&y>s.y-r&&y<s.y+s.d+r;}
 export function carContains(v:VehicleState,x:number,y:number,padding=0){const dx=x-v.x,dy=y-v.y,c=Math.cos(v.angle),s=Math.sin(v.angle);return Math.abs(dx*c+dy*s)<1.6+padding&&Math.abs(-dx*s+dy*c)<.75+padding;}
 export function carOverlap(v:VehicleState,b:Solid){const c=Math.cos(v.angle),s=Math.sin(v.angle),dx=b.x+b.w/2-v.x,dy=b.y+b.d/2-v.y;return Math.abs(dx)<Math.abs(c)*1.6+Math.abs(s)*.75+b.w/2&&Math.abs(dy)<Math.abs(s)*1.6+Math.abs(c)*.75+b.d/2&&Math.abs(dx*c+dy*s)<1.6+Math.abs(c)*b.w/2+Math.abs(s)*b.d/2&&Math.abs(-dx*s+dy*c)<.75+Math.abs(s)*b.w/2+Math.abs(c)*b.d/2;}

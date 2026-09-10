@@ -68,3 +68,33 @@ Crafting UI redesign: compact three-column workshop with category rail, searchab
 
 
 Two-handed bat: bat now follows a torso-relative ready/swing pose and both bent arms solve to adjacent handle grips, including wind-up and follow-through. Preserved the white swing trail. New players start with all five firearm types unlocked in B → Arsenal; starting ammunition unchanged. No tests run.
+
+## 2026-09-09 — Survival and expedition loop
+
+Implemented the prioritized expansion: authored encounter variants and map clues; hearing, pursuit memory, obstacle routes and entrance breaches; bidirectional storage and inventory capacity; vehicle fuel, siphoning, batteries and trunks; homes, barricades, curtains, fatigue, generators, utility outages, weather and perishables; salvage, timber processing and skill-gated recipes; bleeding/pain, bat wear and ammunition types; foraging, fishing and gardens. Added IndexedDB saves and separate Survival/equipped sandbox starts. V opens the live field-action menu. No tests or browser playtests were run, per user instruction. Production build is the compilation check.
+
+Final production build passed. The existing Vite bundle-size warning remains. Development servers were already listening on ports 5173 and 5174.
+
+## 2026-09-10 — Object context actions
+
+Replaced the V / Actions panel with right-click menus on selected world objects. Added exact-object bindings for doors, rear windows, curtains, containers, furniture, vehicles, trees, gas pumps, water, garden plots, generators and player-built structures. Menus show live material/tool counts, unavailable-action reasons, action times and carrying-capacity constraints. Selecting an available action walks the survivor into reach with obstacle-aware routing, then uses the green progress bar. Manual movement, damage, combat, disappearing targets or missing requirements interrupt work. A short right-click opens actions; holding right mouse retains aiming/shoving. E and F shortcuts remain. Keyboard Menu / Shift+F10, arrows and Enter support context-menu navigation. Removed the separate Actions toolbar entry, V binding and nearest-object dismantle button in crafting; updated README and item/control hints.
+
+No tests or browser playtests run, as requested. TypeScript/Vite production build passed; existing bundle-size warning remains.
+
+## 2026-09-10 — More forgiving survival balance
+
+Raised the harmless vehicle collision threshold to 5 world units (25 km/h on the HUD), raised driver-injury onset to 10 (50 km/h), and softened/capped damage beyond these thresholds. Reduced all hearing radii by 55% at perception time, so saved noise events also use the new balance. Indoor noise cannot attract zombies outside its source building; zombies in the same building retain hearing. Door operation sounds originate from the player so closing a door from indoors stays contained. Visual range reduced from 8 to 6 (sneaking 4 to 3), sight memory from 24 to 12 seconds, and noise memory by 40%. House doors, barricades and constructed doors take 2 damage/sec per zombie with a shared per-frame cap of 4/sec; window breach rates are also lower. Noise lures honor the reduced range and building boundary. Existing saves benefit without resetting door health or progress. No tests or browser playtests run, per user preference.
+
+Production compilation passed for the survival balance changes; diff whitespace check passed. No tests run.
+
+## 2026-09-10 — Visible survival activities and live wardrobe
+
+Added blended procedural activity clips with held 3D tools for refuelling, chopping, sawing, cooking, hammering, repair, fishing, gathering, resting and furniture carrying. Timed recipe batches and construction now spend materials at completion; validation and interrupts preserve inputs. Workbench and stove/fire context recipes keep activity in the world. Added seat state for couches/booths, a seated rig pose, fatigue/stamina recovery, safe standing exits and save normalization to standing. Tree cutting accepts axes or saws, has a fall animation and produces logs; construction uses actual structure geometry for a green/red ghost, with existing snapping and rotation. Added campfire motion, cooking steam and quiet tool impacts.
+
+Inventory I now mounts one reusable rotatable Three.js survivor viewport with isolated materials so world darkness cannot affect it. Six wearable clothing items have unique icons and visible garment materials, flannel patterns and jacket pockets; wardrobe and armor changes appear immediately in both world and preview. Clothing swaps preserve old items and reject swaps without room. New clothing and axes enter suitable loot pools; new-run starting supplies include examples. Wardrobe is persisted and older saves use the default outfit. No tests or browser playtests run per user instruction.
+
+Final TypeScript/Vite production build and diff whitespace check passed. No tests or browser playtests run.
+
+Added starter saw/crowbar, original transparent tool icons, crowbar 3D weapon and seven basic tool/material recipes. Arsenal tool shortcuts and save-compatible melee identity included. No tests run.
+
+September 10 — implemented planned settlement districts, supermarket/hospital/prison/barracks/armory layouts, shared nonrectangular footprints for rendering/collision/map, institutional room furnishings and storage, explicit road access, prison courtyard passage, security fencing, planted public parks and six botanical foliage variants. Added three original generated texture atlases. Existing explored saves preserved. TypeScript and Vite build passed; no tests or browser checks run per user preference. Asset prompts and limitations documented in docs/county-district-art.md.

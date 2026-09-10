@@ -1,3 +1,5 @@
+import {CLOTHING,clothingKind} from './wardrobe';
+import {EXPEDITION_ART} from './expedition-content';
 /** Generated cool-utility sheets. White-key extraction is done once at boot;
  * original sheets remain untouched for future asset work. */
 export const ASSET_ROOT='/assets/cool-utility/';
@@ -95,8 +97,13 @@ export async function loadSprites(){
  }
  const gear=new Image();gear.src=ASSET_ROOT+'gear-utilities.png';await gear.decode();
  for(const [i,kind] of ['helmet','kevlar','furniture:washer'].entries())itemImages[kind]=trimmed(transparentIcon(cut(gear,i*gear.width/3,0,gear.width/3,gear.height))).toDataURL();
+ for(const [key,alias] of Object.entries(EXPEDITION_ART))itemImages[key]=itemImages[alias]||itemImages.Manual;itemImages.BatRepair=itemImages.Tape;itemImages['build:storage']=itemImages['furniture:toolchest'];
  for(const [generic,kind] of Object.entries({water:'Water',food:'Beans',bandage:'Bandage',wood:'Plank',ammo:'Ammo'}))itemImages[generic]=itemImages[kind];
 
 }
-export function itemArt(name:string){return itemImages[name]?`<img class="item-sprite" src="${itemImages[name]}" alt="" draggable="false">`:'';}
+export function itemArt(name:string){
+ if(name==='Crowbar'||name==='Saw')return `<img class="item-sprite" src="${ASSET_ROOT}${name==='Crowbar'?'crowbar':'hand-saw'}.png" alt="" draggable="false">`;
+ if(clothingKind(name)){const c=CLOTHING[name],shirt=c.slot==='top';return `<svg class="clothing-art" viewBox="0 0 64 64" aria-hidden="true"><path fill="${c.color}" stroke="#222e2c" stroke-width="2" d="${shirt?'M22 8 9 15 4 31 15 35 20 24 18 57 46 57 44 24 49 35 60 31 55 15 42 8 36 13 28 13Z':'M18 7 46 7 49 57 35 57 32 29 29 57 15 57Z'}"/>${name==='RedFlannel'?'<path stroke="#422f3288" stroke-width="4" d="M24 15v39m14-39v39M20 25h24M20 37h24M20 49h24"/>':''}<path fill="none" stroke="#ddd6ba88" d="${shirt?'M32 15v38M23 24h6v7h-6zM36 24h6v7h-6z':'M19 13h26M32 13v14M22 33l-2 20M42 33l2 20'}"/></svg>`;}
+ if(name==='Axe')return '<svg viewBox="0 0 64 64" aria-hidden="true"><path d="m13 56 29-43" stroke="#463b2b" stroke-width="9"/><path d="m13 56 29-43" stroke="#ad8b54" stroke-width="5"/><path d="m33 14 13-8 14 12-4 13-19-8Z" fill="#778887" stroke="#b8c1b5" stroke-width="2"/></svg>';
+ return itemImages[name]?`<img class="item-sprite" src="${itemImages[name]}" alt="" draggable="false">`:'';}
 export function drawFit(c:CanvasRenderingContext2D,s:HTMLCanvasElement,x:number,y:number,w:number,h:number){const k=Math.min(w/s.width,h/s.height);c.drawImage(s,x-s.width*k/2,y-s.height*k,s.width*k,s.height*k);}

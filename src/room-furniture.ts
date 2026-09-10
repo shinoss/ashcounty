@@ -6,7 +6,16 @@ import type {Solid} from './collision';
 export function furnish(parent:T.Group,h:House,b:Solid){
  const group=new T.Group();group.position.set(b.x-h.x,0,b.y-h.y);parent.add(group);const {w,d,height:y,kind}=b;
  const add=(size:number[],at:number[],tile:number,atlas='furniture'):T.Mesh=>{const m=box(group,size,at,'#827e6b');m.material=mat(atlas,tile);return m;};
- if(kind==='washer'){add([w,y,d],[w/2,y/2,d/2],10);const rim=new T.Mesh(new T.CylinderGeometry(.32,.32,.06,16),mat('furniture',10));rim.rotation.x=Math.PI/2;rim.position.set(w/2,.48,d+.03);group.add(rim);const glass=new T.Mesh(new T.CircleGeometry(.24,16),new T.MeshLambertMaterial({color:'#354950'}));glass.position.set(w/2,.48,d+.07);group.add(glass);}
+ if(h.layout&&['hospitalbed','prisonbed','bunk'].includes(kind)){
+  const tile=kind==='hospitalbed'?4:kind==='prisonbed'?13:9;
+  const bed=(base:number)=>{add([w,.12,d],[w/2,base+.2,d/2],11,'institutions');const top=add([w-.08,.15,d-.08],[w/2,base+.34,d/2],tile,'institutions');top.material=[mat('institutions',11),mat('institutions',11),mat('institutions',tile),mat('institutions',11),mat('institutions',tile),mat('institutions',tile)];};
+  bed(0);if(kind==='bunk')bed(1);
+  for(const x of [.05,w-.05])for(const z of [.05,d-.05])add([.08,y,.08],[x,y/2,z],11,'institutions');
+ }else if(h.layout&&['shelf','produce','checkout','medicine','locker','basin','fridge','toolchest'].includes(kind)){
+  const tile=kind==='shelf'?0:kind==='produce'?1:kind==='checkout'?3:kind==='medicine'?5:kind==='fridge'?2:kind==='basin'?14:kind==='toolchest'?10:8;
+  const side=mat('institutions',11),face=mat('institutions',tile),body=add([w,y,d],[w/2,y/2,d/2],tile,'institutions');body.material=kind==='produce'||kind==='basin'?[side,side,face,side,side,side]:d>w?[face,face,side,side,side,side]:[side,side,side,side,face,face];
+  if(kind==='checkout')add([.45,.3,.4],[w*.65,y+.15,d*.5],3,'institutions');
+ }else if(kind==='washer'){add([w,y,d],[w/2,y/2,d/2],10);const rim=new T.Mesh(new T.CylinderGeometry(.32,.32,.06,16),mat('furniture',10));rim.rotation.x=Math.PI/2;rim.position.set(w/2,.48,d+.03);group.add(rim);const glass=new T.Mesh(new T.CircleGeometry(.24,16),new T.MeshLambertMaterial({color:'#354950'}));glass.position.set(w/2,.48,d+.07);group.add(glass);}
  else if(kind==='sofa'||kind==='booth'){const tile=kind==='booth'?1:(h.design||0)%2?3:0;add([w,.3,d],[w/2,.35,d/2],tile);add([w,.65,.17],[w/2,.53,.085],tile);for(const x of [.1,w-.1])add([.2,.5,d],[x,.45,d/2],tile);}
  else if(kind==='bed'){add([w,.22,d],[w/2,.25,d/2],13);add([w-.08,.16,d-.1],[w/2,.44,d/2],h.kind==='clinic'?2:(h.design||0)%2?14:15);add([w-.2,.12,.35],[w/2,.57,.3],2);add([w,.8,.12],[w/2,.4,.06],4);}
  else if(['bookshelf','shelf','medicine','toolchest','locker','cabinet','counter'].includes(kind)){

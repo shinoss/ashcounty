@@ -1,3 +1,4 @@
+import {CLOTHING,type Outfit} from './wardrobe';
 import {varietyMaterial} from './variety-art';
 import * as T from 'three';
 import {sheets} from './sprite-assets';
@@ -46,10 +47,10 @@ export function sceneryMaterial(color:string,size:number[]){
 function dressSurvivor(root:T.Object3D){
  const tex=(tile:number)=>varietyMaterial('survivor',tile);
  root.traverse(o=>{if(!(o instanceof T.Mesh))return;const parent=o.parent?.name||'';
-  if(parent.startsWith('knee'))o.material=tex(o.position.y<-.35?3:11);
-  else if(parent.startsWith('leg')||parent==='hips')o.material=tex(10);
-  else if(parent.startsWith('arm'))o.material=tex(9);
-  else if(parent.startsWith('elbow'))o.material=tex(o.position.y<-.22?7:9);
+  if(parent.startsWith('knee')){o.material=tex(o.position.y<-.35?3:11);if(o.position.y>=-.35)o.userData.clothingPart='bottom';}
+  else if(parent.startsWith('leg')||parent==='hips'){o.material=tex(10);o.userData.clothingPart='bottom';}
+  else if(parent.startsWith('arm')){o.material=tex(9);o.userData.clothingPart='top';}
+  else if(parent.startsWith('elbow')){o.material=tex(o.position.y<-.22?7:9);if(o.position.y>=-.22)o.userData.clothingPart='top';}
   else if(parent==='torso'){
    if(o.position.y>.6&&o.position.y<.9){
     if(o.scale.y<.1){o.visible=false;return;}
@@ -58,12 +59,24 @@ function dressSurvivor(root:T.Object3D){
      for(let j=0;j<3;j++){const u=front||back?(pos.getX(i+j)-bounds.min.x)/size.x:(pos.getZ(i+j)-bounds.min.z)/size.z;uv.setXY(i+j,side?1-u:u,(pos.getY(i+j)-bounds.min.y)/size.y);}}
     o.geometry=geometry;o.material=[tex(4),tex(5),tex(6)];
    }else if(o.position.y>.89)o.visible=false;
-   else if(o.position.z>=0)o.material=tex(8);
+   else if(o.position.z>=0){o.material=tex(8);o.userData.clothingPart='top';}
    else o.material=tex(1);
   }
  });
  const torso=root.getObjectByName('torso');if(!torso)return;
+ for(const x of [-.12,.12]){const pocket=new T.Mesh(new T.BoxGeometry(.13,.12,.055),tex(8));pocket.position.set(x,.28,.15);pocket.userData.jacketDetail=true;pocket.userData.clothingPart='top';torso.add(pocket);}
  const vest=new T.Mesh(new T.BoxGeometry(.46,.45,.29),[tex(12),tex(12),tex(12),tex(12),tex(0),tex(1)]);vest.userData.armorSlot='kevlar';vest.position.set(0,.25,0);torso.add(vest);
  const helmet=new T.Mesh(new T.SphereGeometry(1,12,8,0,Math.PI*2,0,Math.PI*.58),tex(2));helmet.userData.armorSlot='helmet';helmet.scale.set(.18,.17,.18);helmet.position.set(0,.84,0);torso.add(helmet);
  const rim=new T.Mesh(new T.CylinderGeometry(.18,.183,.025,12,1,true),tex(2));rim.userData.armorSlot='helmet';rim.position.set(0,.80,0);torso.add(rim);
+}
+
+const outfits=new Map<string,T.MeshLambertMaterial>();
+export function updateOutfit(root:T.Object3D,outfit:Outfit){
+ root.traverse(o=>{if(!(o instanceof T.Mesh))return;const part=o.userData.clothingPart as 'top'|'bottom'|undefined;if(!part)return;
+  const key=outfit[part],cacheKey=key||'underlayer:'+part;let m=outfits.get(cacheKey);
+  if(!m){m=varietyMaterial('survivor',part==='top'?8:10).clone();m.color.set(key&&CLOTHING[key]?CLOTHING[key].color:part==='top'?'#dedacc':'#b5a68d');
+   if(key==='RedFlannel'){const canvas=document.createElement('canvas');canvas.width=canvas.height=64;const c=canvas.getContext('2d')!;c.fillStyle='#a65348';c.fillRect(0,0,64,64);for(let i=0;i<64;i+=16){c.fillStyle='#302d2c70';c.fillRect(i,0,7,64);c.fillRect(0,i,64,7);c.fillStyle='#d8b49580';c.fillRect(i+10,0,1,64);c.fillRect(0,i+10,64,1);}const map=new T.CanvasTexture(canvas);map.magFilter=T.NearestFilter;map.colorSpace=T.SRGBColorSpace;m.map=map;m.color.set('#ffffff');}
+   outfits.set(cacheKey,m);}
+  o.material=m;if(o.userData.jacketDetail)o.visible=key==='RangerJacket';
+ });
 }

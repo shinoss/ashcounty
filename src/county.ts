@@ -1,3 +1,4 @@
+import {townPlan} from './county-plan';
 import type {Patch} from './world';
 
 // A finite, seeded county; chunks only stream its contents, never repeat towns.
@@ -29,7 +30,8 @@ export function countyRoads(cx:number,cy:number):Patch[]{
  add(-24*46,20,52*46,6);add(-18*46,9*46+20,46*46,6);
  add(7,-24*46,4,43*46);add(9*46+7,20,4,23*46);add(-9*46+7,20,4,9*46);
  add(27*46+7,20,4,9*46+6);
- if(settlementAt(cx,cy)){add(x,y+20,46,6);add(x+7,y,4,46);}
+ const plan=townPlan(cx,cy);
+ if(plan.settlement){add(x+7,y,4,46);if(plan.landmark?.district==='Medical campus'||plan.landmark?.district==='Correctional complex')add(x+11,y+39,32,4);else add(x,y+20,46,6);}
  // Union rectangular roads so intersections never have stacked asphalt faces.
  const result:Patch[]=[];
  for(const road of roads){let pieces=[road];for(const old of result){pieces=pieces.flatMap(p=>{

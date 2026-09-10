@@ -3,7 +3,8 @@ import type {Simulation} from './sim';
 /** Event sounds only: no ambient noise loop. */
 export class GameAudio{
  context?:AudioContext;master?:GainNode;engine?:OscillatorNode;engineGain?:GainNode;
- muted=true;distance=0;lastDistance=0;lastDoor=0;lastShot=0;lastSwing=0;lastShove=0;
+ workBeat=-1;workKind="";lastWorkTime=0;
+ lastAlarm=0;lastHorn=0;muted=true;distance=0;lastDistance=0;lastDoor=0;lastShot=0;lastSwing=0;lastShove=0;
  setMuted(muted:boolean){this.muted=muted;if(!this.context&&!muted){const c=this.context=new AudioContext();this.master=c.createGain();this.master.connect(c.destination);this.engine=c.createOscillator();this.engine.type='triangle';this.engineGain=c.createGain();this.engineGain.gain.value=0;this.engine.connect(this.engineGain);this.engineGain.connect(this.master);this.engine.start();}if(this.context){this.master!.gain.setTargetAtTime(muted?0:.45,this.context.currentTime,.03);if(!muted)void this.context.resume();}}
  tone(freq:number,end:number,duration:number,volume:number,type:OscillatorType='triangle',delay=0){if(this.muted||!this.context)return;const c=this.context,t=c.currentTime+delay,o=c.createOscillator(),g=c.createGain();o.type=type;o.frequency.setValueAtTime(freq,t);o.frequency.exponentialRampToValueAtTime(end,t+duration);g.gain.setValueAtTime(.001,t);g.gain.linearRampToValueAtTime(volume,t+.008);g.gain.exponentialRampToValueAtTime(.001,t+duration);o.connect(g);g.connect(this.master!);o.start(t);o.stop(t+duration+.01);o.onended=()=>{o.disconnect();g.disconnect();};}
  surface(s:Simulation):'grass'|'pavement'|'tile'|'wood'|'gravel'{
@@ -44,8 +45,9 @@ export class GameAudio{
    if(s.shoveTime>this.lastShove+.02)this.tone(105,65,.18,.08,'sine');
    if(this.lastShove>.78*.55&&s.shoveTime<=.78*.55)this.tone(120,48,.13,.15,'triangle');
   }
-  this.lastShove=s.shoveTime;
+  if(active&&s.life.alarms.some(a=>Math.hypot(a.x-p.x,a.y-p.y)<48)&&s.elapsed-this.lastAlarm>.65){this.lastAlarm=s.elapsed;this.tone(620,980,.35,.12,'square');}if(active&&s.life.hornSerial!==this.lastHorn){this.lastHorn=s.life.hornSerial;this.tone(330,330,.55,.15,'sawtooth');this.tone(415,415,.55,.10,'triangle');}this.lastShove=s.shoveTime;
+  const work=s.life.actionPose;if(active&&work){const beat=Math.floor((work.elapsed-(work.kind==='chop'?.70:.2))/(work.kind==='chop'?1.1:.78));if(work.kind!==this.workKind||work.elapsed<this.lastWorkTime)this.workBeat=-1;if(beat!==this.workBeat){if(work.kind==='chop')this.tone(170,58,.12,.12);else if(work.kind==='hammer'||work.kind==='repair')this.tone(270,90,.065,.075);this.workBeat=beat;}this.workKind=work.kind;this.lastWorkTime=work.elapsed;}else{this.workBeat=-1;this.workKind='';}
   this.lastShot=s.shotTime;this.lastSwing=s.attackTime;
-  if(this.context&&this.engine&&this.engineGain){const t=this.context.currentTime,speed=Math.abs(s.vehicle.speed);this.engine.frequency.setTargetAtTime(42+speed*5,t,.12);this.engineGain.gain.setTargetAtTime(active&&s.driving&&!this.muted?.10+Math.min(speed,12)*.006:0,t,.08);}
+  if(this.context&&this.engine&&this.engineGain){const t=this.context.currentTime,speed=Math.abs(s.vehicle.speed);this.engine.frequency.setTargetAtTime(42+speed*5,t,.12);this.engineGain.gain.setTargetAtTime(active&&s.driving&&(s.vehicle.fuel||0)>0&&!this.muted?.10+Math.min(speed,12)*.006:0,t,.08);}
  }
 }

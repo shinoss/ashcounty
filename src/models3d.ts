@@ -1,3 +1,7 @@
+import {ActionAnimation} from './action-animation';
+import type {ActivityPose} from './activity';
+import type {Outfit} from './wardrobe';
+import {updateOutfit} from './world-materials';
 import type {VehicleKind,GunKind} from './content';
 import * as T from 'three';
 import {dressActor} from './world-materials';
@@ -25,14 +29,15 @@ const wheelGeometry=new T.CylinderGeometry(.32,.32,.19,12);
 const shadowGeometry=new T.CircleGeometry(1,24);
 const shadowMaterial=new T.MeshBasicMaterial({color:'#202f2a',transparent:true,opacity:.23,depthWrite:false});
 function shadow(parent:T.Object3D,x:number,z:number){const mesh=new T.Mesh(shadowGeometry,shadowMaterial);mesh.rotation.x=-Math.PI/2;mesh.scale.set(x,z,1);mesh.position.y=.055;parent.add(mesh);}
-export type ActorPose={groundAttack?:boolean;shove?:number;phase:number;moving:boolean;run?:boolean;sneak?:boolean;aim?:boolean;rifle?:boolean;attack?:number;attacking?:boolean;hurt?:number;recoil?:number;gun?:GunKind;time:number};
+export type ActorPose={meleeKind?:'bat'|'crowbar';action?:ActivityPose;sitting?:boolean;groundAttack?:boolean;shove?:number;phase:number;moving:boolean;run?:boolean;sneak?:boolean;aim?:boolean;rifle?:boolean;attack?:number;attacking?:boolean;hurt?:number;recoil?:number;gun?:GunKind;time:number};
 export class ActorModel{
  root=new T.Group();body=pivot(this.root,0,0,0);hips=pivot(this.body,0,.94,0);
  torso=pivot(this.hips,0,0,0);legs:T.Group[]=[];knees:T.Group[]=[];arms:T.Group[]=[];elbows:T.Group[]=[];
+ work?:ActionAnimation;appearanceKey="";meleeVisual="bat";
  rifle=new T.Group();bat=new T.Group();amplitude=0;lastTime=0;aimBlend=0;gunModels=new Map<GunKind,T.Group>();
  constructor(public zombie=false,variant=0){
   const source=loadedModels.get(zombie?'zombie-'+variant%3:'survivor');
-  if(source){this.root=source.clone(true);const node=(name:string)=>this.root.getObjectByName(name) as T.Group;this.body=node('body');this.hips=node('hips');this.torso=node('torso');this.rifle=node('rifle');this.bat=node('bat');for(let i=0;i<2;i++){this.legs.push(node('leg'+i));this.knees.push(node('knee'+i));this.arms.push(node('arm'+i));this.elbows.push(node('elbow'+i));}dressActor(this.root,zombie,variant);this.setupGuns();return;}
+  if(source){this.root=source.clone(true);const node=(name:string)=>this.root.getObjectByName(name) as T.Group;this.body=node('body');this.hips=node('hips');this.torso=node('torso');this.rifle=node('rifle');this.bat=node('bat');for(let i=0;i<2;i++){this.legs.push(node('leg'+i));this.knees.push(node('knee'+i));this.arms.push(node('arm'+i));this.elbows.push(node('elbow'+i));}dressActor(this.root,zombie,variant);this.setupGuns();if(!zombie){this.setMelee('crowbar');this.setMelee('bat');}if(!zombie)this.work=new ActionAnimation(this);return;}
   shadow(this.root,.35,.26);
   const shirt=zombie?['#6b746b','#85745f','#596d75'][variant%3]:'#687b7d',pants=zombie?'#494f49':'#3f4f58',skin=zombie?'#929480':'#b69c82';
   box(this.torso,[.43,.51,.25],[0,.25,0],shirt);box(this.hips,[.35,.16,.25],[0,0,0],pants);
@@ -49,7 +54,20 @@ export class ActorModel{
   box(this.rifle,[.09,.12,.70],[0,0,.12],'#343c3d');box(this.rifle,[.05,.05,.40],[0,.01,.65],'#222a2d');box(this.rifle,[.08,.20,.14],[0,-.12,.13],'#30383b');
   box(this.bat,[.075,.80,.075],[0,-.23,0],'#948367');this.body.add(this.rifle);this.elbows[1].add(this.bat);this.bat.position.y=-.28;
   this.setupGuns();
-  this.body.name='body';this.hips.name='hips';this.torso.name='torso';this.rifle.name='rifle';this.bat.name='bat';for(let i=0;i<2;i++){this.legs[i].name='leg'+i;this.knees[i].name='knee'+i;this.arms[i].name='arm'+i;this.elbows[i].name='elbow'+i;}
+  this.body.name='body';this.hips.name='hips';this.torso.name='torso';this.rifle.name='rifle';this.bat.name='bat';for(let i=0;i<2;i++){this.legs[i].name='leg'+i;this.knees[i].name='knee'+i;this.arms[i].name='arm'+i;this.elbows[i].name='elbow'+i;}if(!zombie){this.setMelee('crowbar');this.setMelee('bat');dressActor(this.root,false);this.work=new ActionAnimation(this);}
+ }
+ appearance(outfit:Outfit,armor:{helmet:boolean;kevlar:boolean}){const key=JSON.stringify([outfit,armor]);if(key===this.appearanceKey)return;this.appearanceKey=key;updateOutfit(this.root,outfit);this.root.traverse(o=>{const slot=o.userData.armorSlot as 'helmet'|'kevlar'|undefined;if(slot)o.visible=armor[slot];});}
+ setMelee(kind:'bat'|'crowbar'){
+  if(this.zombie||this.meleeVisual===kind)return;
+  this.meleeVisual=kind;
+  if(!this.bat.userData.wooden){const wood=new T.Group();wood.add(...this.bat.children.slice());this.bat.add(wood);this.bat.userData.wooden=wood;
+   const steel=new T.Group(),curve=new T.CatmullRomCurve3([new T.Vector3(0,.17,0),new T.Vector3(0,-.45,0),new T.Vector3(0,-.59,.015),new T.Vector3(0,-.66,.10),new T.Vector3(0,-.59,.19)]);
+   steel.add(new T.Mesh(new T.TubeGeometry(curve,24,.027,8,false),material('#697275')));
+   box(steel,[.055,.10,.014],[0,.19,0],'#adb5b2');
+   for(const x of [-.024,.024])box(steel,[.021,.07,.025],[x,-.565,.19],'#a2aaa8');
+   this.bat.add(steel);this.bat.userData.crowbar=steel;
+  }
+  this.bat.userData.wooden.visible=kind==='bat';this.bat.userData.crowbar.visible=kind==='crowbar';
  }
  setupGuns(){
   if(this.zombie)return;this.rifle.clear();
@@ -75,12 +93,12 @@ export class ActorModel{
    this.elbows[i].quaternion.setFromUnitVectors(new T.Vector3(0,-1,0),target.clone().sub(elbow).normalize().applyQuaternion(arm.quaternion.clone().invert()));
   }
  }
- pose(p:ActorPose){
+ pose(p:ActorPose){this.setMelee(p.meleeKind||'bat');
   const cycle=p.phase*Math.PI*2,desired=p.moving?(p.run?.72:p.sneak?.28:this.zombie?.32:.46):0;
   const delta=Math.max(0,Math.min(.05,p.time-this.lastTime));this.lastTime=p.time;this.amplitude+=(desired-this.amplitude)*(1-Math.exp(-delta*16));const swing=this.amplitude;
   this.body.position.y=p.moving?Math.abs(Math.sin(cycle))*(p.run?.045:.018):Math.sin(p.time*2)*.005;
   this.hips.position.y=p.sneak?.77:.94;this.torso.rotation.set(p.hurt?-.28:p.sneak?.3:this.zombie?.12:p.run?.1:0,Math.sin(cycle)*swing*.08,0);
-  for(let i=0;i<2;i++){const phase=cycle+i*Math.PI,step=Math.sin(phase);this.legs[i].rotation.x=step*swing;this.knees[i].rotation.x=Math.max(0,-Math.cos(phase))*swing*1.15+(p.sneak?.35:0);this.arms[i].rotation.set(-step*swing*.8,0,i===0?.06:-.06);this.elbows[i].rotation.set(p.run?-.9:-.16,0,0);}
+  for(let i=0;i<2;i++){const phase=cycle+i*Math.PI,step=Math.sin(phase);this.legs[i].rotation.set(step*swing,0,0);this.knees[i].rotation.set(0,0,0);this.knees[i].rotation.x=Math.max(0,-Math.cos(phase))*swing*1.15+(p.sneak?.35:0);this.arms[i].rotation.set(-step*swing*.8,0,i===0?.06:-.06);this.elbows[i].rotation.set(p.run?-.9:-.16,0,0);}
   if(this.zombie){this.arms.forEach((arm,i)=>{arm.rotation.x=-.65+Math.sin(cycle+i)*.10-(p.attack||0)*1.2;});}
   for(const [kind,mesh] of this.gunModels)mesh.visible=kind===(p.gun||'carbine');this.rifle.visible=!this.zombie;this.bat.visible=!this.zombie&&!p.rifle;
   this.bat.rotation.set(0,0,0);this.body.rotation.y=0;
@@ -147,6 +165,8 @@ export class ActorModel{
    }
    if(!this.zombie)this.gripBat();
   }
+  if(p.attacking||p.shove||p.aim&&!p.action)this.work?.reset();
+  this.work?.apply(p.action,!!p.sitting,delta);
  }
 }
 export class CarModel{
